@@ -24,6 +24,18 @@ let unsubscribeAdmissions = null;
 let scanner = null;
 let scannerActive = false;
 let scanningNow = false;
+function updateCameraView(state) {
+  const frame = $('scannerFrame');
+  frame.classList.toggle('is-active', state === 'live' || state === 'paused');
+  frame.classList.toggle('is-paused', state === 'paused');
+  $('cameraStatusText').textContent = state === 'live' ? 'KAMERA AKTİVDİR' :
+    state === 'paused' ? 'YOXLANDI' : state === 'loading' ? 'AÇILIR...' : 'KAMERA BAĞLIDIR';
+  $('cameraStatus').classList.toggle('camera-status-live', state === 'live');
+}
+
+let recentTickets = [];
+let pendingDeleteCode = null;
+let deletingTicket = false;
 let pausedForResult = false;
 let toastTimeout;
 let totalTickets = null;
@@ -192,37 +204,112 @@ function downloadQr() {
   }, 'image/png');
 }
 
+function renderTicketList() {
+  const list = $('recentList');
+  const term = $('ticketSearch').value.trim().toUpperCase();
+  const filtered = recentTickets.filter(item => item.data.code.toUpperCase().includes(term));
+  $('recentCount').textContent = term ? `${filtered.length} / ${recentTickets.length}` : `CƏM ${recentTickets.length}`;
+  list.replaceChildren();
+  if (!filtered.length) {
+    const p = document.createElement('p');
+    p.className = 'empty-list';
+    p.textContent = term ? 'Bu nömrə ilə bilet tapılmadı.' : 'Hələ bilet yoxdur.';
+    list.append(p);
+    return;
+  }
+  const fragment = document.createDocumentFragment();
+  for (const item of filtered) {
+    const data = item.data;
+    const row = document.createElement('div');
+    row.className = 'recent-item';
+
+    const openButton = document.createElement('button');
+    openButton.type = 'button';
+    openButton.className = 'recent-open';
+    openButton.setAttribute('aria-label', `${data.code} biletinin QR kodunu göstər`);
+    const code = document.createElement('span');
+    code.className = 'recent-code';
+    code.textContent = data.code;
+    const status = document.createElement('span');
+    status.className = 'recent-status';
+    status.textContent = data.used ? 'İstifadə olunub' : 'QR-ni göstər ↗';
+    openButton.append(code, status);
+    openButton.addEventListener('click', async () => {
+      try {
+        const updated = await getDoc(doc(db, TICKET_COLLECTION, item.id));
+        if (updated.exists()) displayTicket(updated.data());
+        else toast('Bilet artıq bazada yoxdur.');
+      } catch (error) { toast(friendlyError(error)); }
+    });
+
+    const deleteButton = document.createElement('button');
+    deleteButton.type = 'button';
+    deleteButton.className = 'recent-delete';
+    deleteButton.setAttribute('aria-label', `${data.code} nömrəli bileti sil`);
+    deleteButton.innerHTML = '<svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M4 7h16M10 7V4h4v3M6.5 7l1 13h9l1-13M10 11v5M14 11v5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg><span>Sil</span>';
+    deleteButton.addEventListener('click', () => openDeleteDialog(item.id));
+    row.append(openButton, deleteButton);
+    fragment.append(row);
+  }
+  list.append(fragment);
+}
+function openDeleteDialog(code) {
+  if (deletingTicket) return;
+  pendingDeleteCode = code;
+  $('deleteTargetCode').textContent = code;
+  $('deleteMessage').textContent = '';
+  $('deleteDialog').showModal();
+}
+async function deleteTicket() {
+  if (!pendingDeleteCode || deletingTicket) return;
+  const code = pendingDeleteCode;
+  deletingTicket = true;
+  $('confirmDeleteBtn').disabled = true;
+  $('cancelDeleteBtn').disabled = true;
+  $('confirmDeleteBtn').textContent = 'Silinir...';
+  $('deleteMessage').textContent = 'Firestore qeydləri silinir...';
+  try {
+    const ticketRef = doc(db, TICKET_COLLECTION, code);
+    const checkinRef = doc(db, CHECKIN_COLLECTION, code);
+    // Hər iki sənəd eyni atomik tranzaksiyada silinir. Oxunmuş biletin
+    // daxilolma qeydi də silinir; şəbəkə xətasında heç biri silinmir.
+    await runTransaction(db, async tx => {
+      const ticketSnap = await tx.get(ticketRef);
+      const checkinSnap = await tx.get(checkinRef);
+      if (!ticketSnap.exists()) throw new Error('NOT_FOUND');
+      tx.delete(ticketRef);
+      if (checkinSnap.exists()) tx.delete(checkinRef);
+    });
+    if (currentTicket?.code === code) clearGeneratedTicket();
+    $('deleteDialog').close();
+    pendingDeleteCode = null;
+    toast(`${code} silindi; daxilolma qeydi də təmizləndi.`);
+  } catch (error) {
+    $('deleteMessage').textContent = error?.message === 'NOT_FOUND'
+      ? 'Bilet artıq bazada yoxdur. Siyahı yenilənəcək.' : friendlyError(error);
+  } finally {
+    deletingTicket = false;
+    $('confirmDeleteBtn').disabled = false;
+    $('cancelDeleteBtn').disabled = false;
+    $('confirmDeleteBtn').textContent = 'Bəli, bileti sil';
+  }
+}
 function subscribeRecent() {
   unsubscribeRecent?.();
-  // Canlı göstəricilər üçün bütün çap biletlərini dinləyirik; son siyahıda yalnız 8-i göstərilir.
-  // Böyük həcmli tədbirlərdə bu göstəriciləri server-side sayğaclara keçirmək məsləhətdir.
+  // Bütün biletlər siyahı və statistikalar üçün real vaxtda dinlənir.
   const q = query(collection(db, TICKET_COLLECTION), orderBy('createdAt', 'desc'));
   unsubscribeRecent = onSnapshot(q, snap => {
     totalTickets = snap.size;
+    recentTickets = snap.docs.map(item => ({ id: item.id, data: item.data() }));
     updateStats();
-    $('recentCount').textContent = snap.size ? `SON ${Math.min(snap.size, 8)}` : '0';
-    const list = $('recentList');
-    list.replaceChildren();
-    if (snap.empty) {
-      const p = document.createElement('p'); p.className = 'empty-list'; p.textContent = 'Hələ bilet yoxdur.';
-      list.append(p); return;
-    }
-    for (const item of snap.docs.slice(0, 8)) {
-      const data = item.data();
-      const row = document.createElement('button');
-      row.className = 'recent-item'; row.type = 'button';
-      const code = document.createElement('span'); code.textContent = data.code;
-      const status = document.createElement('span'); status.textContent = data.used ? 'İstifadə olunub' : 'QR-ni göstər ↗';
-      row.append(code, status);
-      row.addEventListener('click', async () => {
-        try {
-          const updated = await getDoc(doc(db, TICKET_COLLECTION, data.code));
-          if (updated.exists()) displayTicket(updated.data());
-        } catch (error) { toast(friendlyError(error)); }
-      });
-      list.append(row);
-    }
-  }, error => { totalTickets = null; updateStats(); $('generateMessage').textContent = friendlyError(error); });
+    renderTicketList();
+  }, error => {
+    totalTickets = null;
+    recentTickets = [];
+    updateStats();
+    $('generateMessage').textContent = friendlyError(error);
+    renderTicketList();
+  });
 }
 function subscribeAdmissions() {
   unsubscribeAdmissions?.();
@@ -262,6 +349,7 @@ async function checkQr(decodedText) {
   scanningNow = true;
   pausedForResult = true;
   try { scanner?.pause(true); } catch { /* başqa bir keçid zamanı dayandırılmış ola bilər */ }
+  updateCameraView('paused');
   scanFeedback('warning', 'QR yoxlanılır. Firestore ilə əlaqə qurulur...');
   try {
     const match = /^TF1\|(TF-[A-Z2-9]{4}-[A-Z2-9]{4}-[A-Z2-9]{4})\|([A-Za-z0-9_-]{32})$/.exec(decodedText);
@@ -309,20 +397,25 @@ async function startScanner() {
   }
   $('startScanBtn').disabled = true;
   $('startScanBtn').textContent = 'Kamera açılır...';
+  updateCameraView('loading');
   try {
     scanner = new window.Html5Qrcode('scannerViewport', {
       formatsToSupport: [window.Html5QrcodeSupportedFormats.QR_CODE], verbose: false
     });
+    // Kamera öz təbii en/hündürlük nisbətində göstərilir; süni 4:3 kəsmə yoxdur.
+    // Bütün görüntü skan olunur, ekrandakı nişan yalnız vizual bələdçidir.
     await scanner.start({ facingMode: 'environment' }, {
-      fps: 10, qrbox: { width: 210, height: 210 }
-    }, checkQr, () => { /* scan başarısız kadrlar normaldır */ });
+      fps: 12
+    }, checkQr, () => { /* Kod olmayan kadrlarda xəta göstərilmir. */ });
     scannerActive = true;
     pausedForResult = false;
     $('scannerPlaceholder').classList.add('hidden');
+    updateCameraView('live');
     $('scanFeedback').classList.add('hidden');
     $('stopScanBtn').classList.remove('hidden');
     $('startScanBtn').classList.add('hidden');
   } catch (error) {
+    updateCameraView('idle');
     scanFeedback('error', 'Kamera açıla bilmədi. Kamera icazəsini və başqa tətbiqin kameradan istifadə etmədiyini yoxlayın.');
     try { scanner?.clear(); } catch { /* ignore */ }
     scanner = null;
@@ -336,6 +429,7 @@ function nextScan() {
   try {
     scanner.resume();
     pausedForResult = false;
+    updateCameraView('live');
     $('nextScanBtn').classList.add('hidden');
     $('scanFeedback').classList.add('hidden');
   } catch { toast('Kamera bərpa edilə bilmədi. Yenidən açın.'); }
@@ -350,6 +444,7 @@ async function stopScanner() {
   pausedForResult = false;
   scanningNow = false;
   $('scannerViewport').replaceChildren();
+  updateCameraView('idle');
   $('scannerPlaceholder').classList.remove('hidden');
   $('startScanBtn').classList.remove('hidden');
   $('nextScanBtn').classList.add('hidden');
@@ -359,8 +454,9 @@ async function stopScanner() {
 function cleanupSubscriptions() {
   unsubscribeRecent?.(); unsubscribeRecent = null;
   unsubscribeAdmissions?.(); unsubscribeAdmissions = null;
-  totalTickets = null; checkedInTickets = null;
+  totalTickets = null; checkedInTickets = null; recentTickets = [];
   updateStats();
+  renderTicketList();
 }
 
 // Firebase təhlükəsizliyi: mövcud TicketFlow admin hesabı + tfAdmins/{uid}.active === true.
@@ -420,6 +516,11 @@ $('loginForm').addEventListener('submit', async event => {
 });
 $('logoutBtn').addEventListener('click', async () => { await stopScanner(); await signOut(auth); });
 $('generateBtn').addEventListener('click', createNewTicket);
+$('ticketSearch').addEventListener('input', renderTicketList);
+$('cancelDeleteBtn').addEventListener('click', () => $('deleteDialog').close());
+$('confirmDeleteBtn').addEventListener('click', deleteTicket);
+$('deleteDialog').addEventListener('cancel', event => { if (deletingTicket) event.preventDefault(); });
+$('deleteDialog').addEventListener('close', () => { if (!deletingTicket) pendingDeleteCode = null; });
 $('copyBtn').addEventListener('click', copyCode);
 $('downloadBtn').addEventListener('click', downloadQr);
 $('startScanBtn').addEventListener('click', startScanner);
