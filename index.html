@@ -9,7 +9,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="./style.css" />
+  <link rel="stylesheet" href="./style.css?v=5" />
 </head>
 <body>
   <div id="authScreen" class="auth-screen">
@@ -30,7 +30,10 @@
   <div id="app" class="app hidden">
     <header class="site-header">
       <div class="shell header-inner">
-        <div class="brand"><span class="brand-icon brand-logo"><img src="./logo.png" alt="TicketFlow loqosu" decoding="async" /></span><span class="brand-text"><strong>TicketFlow</strong><small>QR STUDIO</small></span><span class="brand-product">ADMISSION SUITE</span></div>
+        <div class="brand" aria-label="TicketFlow QR Studio">
+          <span class="brand-icon brand-logo"><img src="./logo.png" alt="TicketFlow" decoding="async" style="display:block;width:100%;height:100%;max-width:100%;max-height:100%;object-fit:contain;" /></span>
+          <span class="brand-text"><strong>QR STUDIO</strong><small>ADMISSION SUITE</small></span>
+        </div>
         <div class="header-actions"><span class="connection-status"><span class="pulse-dot"></span> Firestore aktiv</span><span id="userLabel" class="user-email"></span><button id="logoutBtn" class="button button-ghost button-small" type="button" aria-label="Hesabdan çıxış">Çıxış <span aria-hidden="true">↗</span></button></div>
       </div>
     </header>
