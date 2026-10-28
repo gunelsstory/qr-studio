@@ -4,7 +4,7 @@ import {
   setPersistence, inMemoryPersistence
 } from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js';
 import {
-  getFirestore, doc, getDoc, collection, query, orderBy, limit,
+  getFirestore, doc, getDoc, collection, query, orderBy,
   onSnapshot, serverTimestamp, runTransaction
 } from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js';
 import { firebaseConfig } from './firebase-config.js';
@@ -26,6 +26,28 @@ let scannerActive = false;
 let scanningNow = false;
 let pausedForResult = false;
 let toastTimeout;
+let totalTickets = null;
+let checkedInTickets = null;
+
+function updateStats() {
+  const ready = Number.isInteger(totalTickets) && Number.isInteger(checkedInTickets);
+  const total = ready ? totalTickets : 0;
+  const used = ready ? Math.min(checkedInTickets, total) : 0;
+  const unused = Math.max(0, total - used);
+  const scannedPct = total ? Math.round(used * 100 / total) : 0;
+  const activePct = total ? Math.round(unused * 100 / total) : 0;
+  $('statTotal').textContent = ready ? total.toLocaleString('az-AZ') : '—';
+  $('statScanned').textContent = ready ? used.toLocaleString('az-AZ') : '—';
+  $('statAvailable').textContent = ready ? unused.toLocaleString('az-AZ') : '—';
+  $('scannedPercent').textContent = scannedPct + '%';
+  $('availablePercent').textContent = activePct + '%';
+  $('donutTotal').style.setProperty('--progress', total ? '100%' : '0%');
+  $('donutScanned').style.setProperty('--progress', scannedPct + '%');
+  $('donutAvailable').style.setProperty('--progress', activePct + '%');
+  $('donutTotal').setAttribute('aria-label', `${total} yaradılan bilet`);
+  $('donutScanned').setAttribute('aria-label', `${used} yoxlanmış bilet, ${scannedPct} faiz`);
+  $('donutAvailable').setAttribute('aria-label', `${unused} aktiv bilet, ${activePct} faiz`);
+}
 
 function toast(message) {
   $('toast').textContent = message;
@@ -58,7 +80,9 @@ function formatDate(ts) {
 }
 function setGenerateLoading(loading) {
   $('generateBtn').disabled = loading;
-  $('generateBtn').textContent = loading ? 'Firestore-a yazılır...' : '+   New Generate   ↗';
+  $('generateBtn').innerHTML = loading
+    ? '<span>Firestore-a yazılır...</span>'
+    : '<span class="plus-sign" aria-hidden="true">＋</span> New Generate <span class="arrow" aria-hidden="true">↗</span>';
 }
 function clearGeneratedTicket() {
   currentTicket = null;
@@ -67,7 +91,7 @@ function clearGeneratedTicket() {
   $('qrcode').innerHTML = '';
   $('qrEmpty').classList.remove('hidden');
   $('ticketState').textContent = 'HAZIR DEYİL';
-  $('ticketState').className = 'mini-tag neutral';
+  $('ticketState').className = 'chip chip-muted';
   $('copyBtn').disabled = true;
   $('downloadBtn').disabled = true;
 }
@@ -78,7 +102,7 @@ function displayTicket(data) {
     ? 'Bu bilet artıq istifadə olunub. Eyni QR ikinci dəfə qəbul edilmir.'
     : 'Firestore-da saxlanılıb. QR kodu çap dizaynına əlavə edə bilərsiniz.';
   $('ticketState').textContent = data.used ? 'İSTİFADƏ OLUNUB' : 'FIRESTORE SAVED';
-  $('ticketState').className = data.used ? 'mini-tag neutral' : 'mini-tag issued';
+  $('ticketState').className = data.used ? 'chip chip-muted' : 'chip chip-issued';
   if (typeof window.QRCode === 'undefined') {
     $('generateMessage').textContent = 'QR kitabxanası yüklənmədi; internet bağlantısını yoxlayın.';
     return;
@@ -170,16 +194,20 @@ function downloadQr() {
 
 function subscribeRecent() {
   unsubscribeRecent?.();
-  const q = query(collection(db, TICKET_COLLECTION), orderBy('createdAt', 'desc'), limit(10));
+  // Canlı göstəricilər üçün bütün çap biletlərini dinləyirik; son siyahıda yalnız 8-i göstərilir.
+  // Böyük həcmli tədbirlərdə bu göstəriciləri server-side sayğaclara keçirmək məsləhətdir.
+  const q = query(collection(db, TICKET_COLLECTION), orderBy('createdAt', 'desc'));
   unsubscribeRecent = onSnapshot(q, snap => {
-    $('recentCount').textContent = snap.size ? `SON ${snap.size}` : '0';
+    totalTickets = snap.size;
+    updateStats();
+    $('recentCount').textContent = snap.size ? `SON ${Math.min(snap.size, 8)}` : '0';
     const list = $('recentList');
     list.replaceChildren();
     if (snap.empty) {
       const p = document.createElement('p'); p.className = 'empty-list'; p.textContent = 'Hələ bilet yoxdur.';
       list.append(p); return;
     }
-    for (const item of snap.docs) {
+    for (const item of snap.docs.slice(0, 8)) {
       const data = item.data();
       const row = document.createElement('button');
       row.className = 'recent-item'; row.type = 'button';
@@ -194,12 +222,14 @@ function subscribeRecent() {
       });
       list.append(row);
     }
-  }, error => { $('generateMessage').textContent = friendlyError(error); });
+  }, error => { totalTickets = null; updateStats(); $('generateMessage').textContent = friendlyError(error); });
 }
 function subscribeAdmissions() {
   unsubscribeAdmissions?.();
   const q = query(collection(db, CHECKIN_COLLECTION), orderBy('scannedAt', 'desc'));
   unsubscribeAdmissions = onSnapshot(q, snap => {
+    checkedInTickets = snap.size;
+    updateStats();
     $('admissionsCount').replaceChildren();
     $('admissionsCount').append(document.createTextNode(String(snap.size)));
     const suffix = document.createElement('span'); suffix.textContent = ' bilet';
@@ -218,6 +248,7 @@ function subscribeAdmissions() {
       row.append(code, time); list.append(row);
     });
   }, error => {
+    checkedInTickets = null; updateStats();
     const list = $('admissionsList'); list.textContent = friendlyError(error);
   });
 }
@@ -253,7 +284,7 @@ async function checkQr(decodedText) {
     if (currentTicket?.code === code) currentTicket.used = true;
     if (currentTicket?.code === code) {
       $('ticketState').textContent = 'İSTİFADƏ OLUNUB';
-      $('ticketState').className = 'mini-tag neutral';
+      $('ticketState').className = 'chip chip-muted';
       $('ticketMeta').textContent = 'Bu bilet artıq istifadə olunub. Eyni QR ikinci dəfə qəbul edilmir.';
     }
   } catch (error) {
@@ -328,6 +359,8 @@ async function stopScanner() {
 function cleanupSubscriptions() {
   unsubscribeRecent?.(); unsubscribeRecent = null;
   unsubscribeAdmissions?.(); unsubscribeAdmissions = null;
+  totalTickets = null; checkedInTickets = null;
+  updateStats();
 }
 
 // Firebase təhlükəsizliyi: mövcud TicketFlow admin hesabı + tfAdmins/{uid}.active === true.
