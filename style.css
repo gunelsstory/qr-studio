@@ -5,3 +5,180 @@
 @media(max-width:720px){.shell{padding:0 16px}.site-header{height:68px}.brand-product,.user-email,.connection-status{display:none}.brand-icon{height:37px;width:37px}.hero{margin-top:0;min-height:0;padding:24px 22px}.hero-art{display:none}.hero h1{font-size:27px}.hero p{font-size:11px}.section-heading h2{font-size:20px}.metrics{grid-template-columns:repeat(3,minmax(0,1fr));gap:9px}.metric-card{padding:14px 12px}.metric-heading{font-size:10px}.metric-icon{height:29px;width:29px}.metric-body{padding-top:13px;gap:12px}.donut{width:91px;height:91px;flex-basis:91px}.donut-hole{height:68px;width:68px}.metric-copy>span{display:none}.metric-copy>strong{font-size:10px;min-height:30px}.metric-foot{font-size:9px}.workspace,.admission-workspace{grid-template-columns:1fr;gap:13px;margin-top:15px}.ticket-preview{flex-direction:row;align-items:center}.qr-wrap{width:192px;height:192px;flex-basis:192px}.qr-wrap #qrcode canvas,.qr-wrap #qrcode img{width:170px!important;height:170px!important}.admission-section{margin-top:28px}footer span:last-child{display:none}}
 @media(max-width:480px){.hero h1{font-size:24px}.hero-pills{gap:6px}.hero-pills>span{font-size:9px}.section-heading{align-items:flex-start;gap:8px}.live-label,.section-heading>p{display:none}.metrics{grid-template-columns:1fr;gap:9px}.metric-card{padding:13px 16px}.metric-body{flex-direction:row;align-items:center;gap:18px;padding-top:4px}.metric-heading{font-size:11px}.metric-copy>strong{font-size:12px;min-height:0}.metric-copy>span{display:block}.donut{width:96px;height:96px;flex-basis:96px}.donut-hole{height:74px;width:74px}.surface{padding:19px 17px}.panel-title h2{font-size:16px}.ticket-preview{flex-direction:column;text-align:center}.ticket-information{width:100%}.ticket-actions{justify-content:center}.ticket-actions .button{flex:1}.ticket-code{font-size:17px}.qr-wrap{width:216px;height:216px;flex-basis:216px}.qr-wrap #qrcode canvas,.qr-wrap #qrcode img{width:192px!important;height:192px!important}.admission-row{margin:0 11px}.admissions-heading{padding:12px}.admission-code{font-size:9px}.login-panel{padding:29px 22px}}
 @media(prefers-reduced-motion:reduce){*,*:before,*:after{scroll-behavior:auto!important;transition:none!important}}
+
+/* ==========================================================
+   QR STUDIO / COMPACT MOBILE v3
+   Only mobile layouts. Desktop (min-width: 721px) is untouched.
+   No Firestore, QR, auth or scanner logic is modified.
+   ========================================================== */
+@media (max-width:720px) {
+  .shell { padding-inline:14px; }
+  .site-header { height:60px; }
+  .header-inner { gap:10px; }
+  .brand { gap:8px; }
+  .brand-icon { width:33px; height:33px; border-radius:9px; }
+  .brand-icon svg { width:21px; height:21px; }
+  .brand-text strong { font-size:15px; }
+  .brand-text small { font-size:7px; letter-spacing:1.8px; margin-top:3px; }
+  .header-actions .button-small { min-height:32px; padding:6px 11px; font-size:10px; }
+  .main-content { padding-top:14px; }
+  .hero { padding:17px 19px; margin-bottom:17px; border-radius:16px; }
+  .hero h1 { font-size:23px; line-height:1.22; margin:9px 0 7px; letter-spacing:-.65px; }
+  .hero p { font-size:10px; line-height:1.55; }
+  .eyebrow,.section-kicker { font-size:8px; letter-spacing:1.1px; gap:7px; }
+  .hero-pills { gap:6px; margin-top:13px; }
+  .hero-pills > span { padding:5px 8px; font-size:8.3px; }
+  .hero-pills svg { width:12px; height:12px; }
+  .section-heading { margin-bottom:10px; }
+  .section-heading h2 { font-size:18px; margin-top:2px; }
+
+  /* Three compact ring infographics on one row, including narrow phones. */
+  .metrics { grid-template-columns:repeat(3,minmax(0,1fr)); gap:8px; }
+  .metric-card { display:flex; flex-direction:column; align-items:center; min-width:0; min-height:151px; padding:11px 9px 10px; border-radius:14px; }
+  .metric-heading { width:100%; justify-content:center; gap:5px; min-height:29px; text-align:center; font-size:9.5px; line-height:1.25; }
+  .metric-icon { width:23px; height:23px; border-radius:7px; flex:0 0 23px; }
+  .metric-icon svg { width:13px; height:13px; }
+  .metric-body { width:100%; flex:1; flex-direction:column; align-items:center; justify-content:center; gap:7px; padding-top:6px; }
+  .donut { width:76px; height:76px; flex:0 0 76px; }
+  .donut-hole { width:59px; height:59px; }
+  .donut-hole strong { font-size:19px; letter-spacing:-.4px; }
+  .donut-hole small { font-size:7.7px; }
+  .metric-copy { width:100%; align-items:center; gap:0; }
+  .metric-copy > strong,.metric-copy > span { display:none; }
+  .metric-foot { width:100%; justify-content:center; gap:3px; margin:0; padding:0; border:0; white-space:nowrap; font-size:8.5px; }
+  .metric-foot > span[id] { font-size:9px; }
+  .metric-mini-dot { width:5px; height:5px; }
+
+  .workspace,.admission-workspace { gap:11px; margin-top:15px; }
+  .surface { padding:17px 18px; border-radius:15px; }
+  .panel-number { font-size:9px; }
+  .panel-number > span { font-size:8px; }
+  .chip { padding:4px 7px; font-size:8px; }
+  .panel-title { margin-top:14px; margin-bottom:14px; gap:10px; }
+  .panel-icon { width:35px; height:35px; flex-basis:35px; border-radius:10px; }
+  .panel-icon svg { width:18px; height:18px; }
+  .panel-title h2 { font-size:15px; }
+  .panel-title p { font-size:9.5px; margin-top:2px; }
+  .generator-explain { padding:11px 12px; gap:10px; margin-bottom:12px; border-radius:10px; }
+  .explain-symbol { width:33px; height:33px; flex-basis:33px; border-radius:9px; }
+  .explain-symbol svg { width:19px; height:19px; }
+  .generator-explain b { font-size:10px; }
+  .generator-explain span { font-size:9px; line-height:1.5; }
+  .button-wide { min-height:44px; }
+  .generate-action { padding:9px 13px; font-size:11px; }
+  .action-hint { margin:7px 0 0; font-size:9px; }
+  .recent { padding-top:11px; margin-top:13px; }
+  .recent-list { max-height:125px; }
+  .recent-item { min-height:34px; padding:6px 2px; }
+  .ticket-preview { gap:15px; min-height:0; padding:0 0 14px; }
+  .qr-wrap { width:156px; height:156px; flex-basis:156px; border-radius:12px; }
+  .qr-wrap #qrcode canvas,.qr-wrap #qrcode img { width:137px!important; height:137px!important; }
+  .qr-empty { border-radius:12px; }
+  .qr-empty svg { width:62px; height:62px; }
+  .ticket-code { font-size:16px; margin:6px 0; }
+  .ticket-hint { font-size:9px; line-height:1.55; margin-bottom:10px; min-height:0; }
+  .ticket-actions .button { padding:8px 10px; min-height:34px; font-size:9px; }
+  .ticket-footer { padding-top:11px; font-size:9px; }
+  .admission-section { margin-top:21px; }
+  .scanner-panel .panel-title,.admissions-panel .panel-title { margin-bottom:13px; }
+  .scanner-viewport { height:195px; border-radius:11px; }
+  .scanner-placeholder svg { width:55px; height:55px; margin-bottom:4px; }
+  .scanner-placeholder b { font-size:11px; }
+  .scanner-placeholder span { font-size:9px; }
+  .scanner-buttons { margin-top:10px; }
+  .scanner-hint { margin-top:8px; font-size:8.5px; }
+  .scan-feedback { padding:10px 11px; font-size:10px; }
+  .entry-count { font-size:17px; }
+  .admissions-list { min-height:145px; max-height:215px; }
+  .admissions-heading { padding:10px 12px; }
+  .admission-row { margin-inline:11px; padding:10px 0; }
+  .empty-admissions { padding:49px 10px; }
+  .admissions-footer { margin-top:10px; font-size:9px; }
+  footer { padding:24px 0 20px; }
+}
+@media (max-width:480px) {
+  .shell { padding-inline:12px; }
+  .hero { padding:15px 16px; margin-bottom:15px; }
+  .hero h1 { font-size:21px; }
+  .hero p { font-size:9.5px; }
+  .hero-pills { margin-top:11px; }
+  .hero-pills > span { font-size:8px; }
+  .metrics { grid-template-columns:repeat(3,minmax(0,1fr)); gap:6px; }
+  .metric-card { padding:10px 6px 9px; min-height:144px; border-radius:12px; }
+  .metric-heading { font-size:9px; min-height:28px; }
+  .metric-icon { display:none; }
+  .metric-body { flex-direction:column; gap:7px; padding-top:5px; }
+  .donut { width:69px; height:69px; flex-basis:69px; }
+  .donut-hole { width:53px; height:53px; }
+  .donut-hole strong { font-size:17px; }
+  .donut-hole small { font-size:7px; }
+  .metric-copy > strong,.metric-copy > span { display:none; }
+  .metric-foot { font-size:8px; }
+  .metric-foot > span[id] { font-size:8.5px; }
+  .surface { padding:14px 14px; }
+  .panel-title { margin-top:12px; margin-bottom:12px; }
+  .generator-explain { margin-bottom:10px; }
+  /* On phones, QR and ticket code share one row instead of tall stacked cards. */
+  .ticket-preview { flex-direction:row; align-items:center; text-align:left; gap:12px; }
+  .qr-wrap { width:132px; height:132px; flex-basis:132px; }
+  .qr-wrap #qrcode canvas,.qr-wrap #qrcode img { width:116px!important; height:116px!important; }
+  .qr-empty svg { width:50px; height:50px; }
+  .qr-empty > span { font-size:7px; letter-spacing:.8px; }
+  .ticket-information { width:auto; flex:1; min-width:0; }
+  .ticket-code { font-size:14px; letter-spacing:.1px; line-height:1.4; }
+  .info-kicker { font-size:8px; }
+  .ticket-hint { font-size:8.5px; margin-bottom:8px; }
+  .ticket-actions { display:grid; grid-template-columns:1fr; gap:6px; justify-content:stretch; }
+  .ticket-actions .button { width:100%; min-height:31px; padding:6px 8px; font-size:9px; }
+  .scanner-viewport { height:178px; }
+  .scanner-placeholder svg { width:51px; height:51px; }
+  .admissions-list { min-height:130px; }
+  .empty-admissions { padding:43px 10px; }
+}
+@media (max-width:350px) {
+  .hero h1 { font-size:19px; }
+  .metric-card { padding-inline:4px; }
+  .metric-heading { font-size:8.2px; }
+  .donut { width:61px; height:61px; flex-basis:61px; }
+  .donut-hole { width:47px; height:47px; }
+  .donut-hole strong { font-size:15px; }
+  .metric-foot { font-size:7.2px; }
+  .metric-foot > span[id] { font-size:7.6px; }
+  .surface { padding:12px; }
+  .qr-wrap { width:112px; height:112px; flex-basis:112px; }
+  .qr-wrap #qrcode canvas,.qr-wrap #qrcode img { width:100px!important; height:100px!important; }
+  .ticket-preview { gap:9px; }
+  .ticket-code { font-size:12px; }
+  .ticket-actions .button { font-size:8.3px; }
+}
+
+
+/* Brand mark: replace the letter T with the logo.png file in the same repo folder.
+   Brand copy stays in place. Intentionally independent of all Firebase logic. */
+.brand-icon.brand-logo {
+  width:46px;
+  height:42px;
+  flex:0 0 46px;
+  border:0;
+  border-radius:0;
+  padding:0;
+  background:transparent;
+  box-shadow:none;
+  overflow:hidden;
+}
+.brand-icon.brand-logo img {
+  width:100%;
+  height:100%;
+  display:block;
+  object-fit:contain;
+  object-position:center;
+}
+.auth-mark .brand-icon.brand-logo { width:49px; height:46px; flex-basis:49px; }
+@media (max-width:720px) {
+  .brand-icon.brand-logo { width:38px; height:35px; flex-basis:38px; }
+  .brand-text strong { font-size:14px; }
+  .brand-text small { font-size:8px; letter-spacing:1.45px; }
+}
+@media (max-width:350px) {
+  .brand-icon.brand-logo { width:33px; height:31px; flex-basis:33px; }
+}
