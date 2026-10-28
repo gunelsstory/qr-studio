@@ -269,3 +269,211 @@
   #app .site-header .brand-text strong {font-size:8.5px;letter-spacing:.5px;}
   #app .site-header .header-actions .button-small {padding:6px 8px;}
 }
+
+
+/* ================================================================
+   v6 · CAMERA VIEW REFINEMENT
+   Responsive camera dimensions, unclipped preview and a consistent
+   scan guide. Overrides only the old fixed-height scanner styling.
+   ================================================================ */
+.scanner-panel { min-width:0; }
+.scanner-viewport {
+  position:relative;
+  isolation:isolate;
+  width:100%;
+  height:auto;
+  min-height:0;
+  max-height:315px;
+  aspect-ratio:4 / 3;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  padding:0;
+  background:linear-gradient(145deg,#f4f8ff,#eaf1fa);
+  border:1px dashed #cdddf0;
+  border-radius:16px;
+  overflow:hidden;
+  transition:border-color .2s,background .2s;
+}
+.scanner-viewport.is-active {
+  background:#0b1727;
+  border:1px solid #293d59;
+  box-shadow:inset 0 0 0 1px #FFFFFF0A;
+}
+.scanner-viewport #scannerViewport {
+  position:relative;
+  z-index:1;
+  flex:0 0 auto;
+  width:min(100%,420px);
+  height:auto;
+  max-width:100%;
+  min-width:0;
+  overflow:hidden;
+  background:transparent;
+  line-height:0;
+}
+/* Let html5-qrcode own video dimensions: overriding video height or
+   object-fit:cover would misalign its scan pixels with the picture. */
+#app .scanner-viewport #scannerViewport video {
+  display:block!important;
+  width:100%!important;
+  height:auto!important;
+  max-width:100%!important;
+  object-fit:contain!important;
+  margin:0 auto!important;
+  border:0!important;
+}
+.scanner-viewport .scanner-placeholder {
+  z-index:2;
+  inset:0;
+  background:transparent;
+}
+.scanner-overlay {
+  position:absolute;
+  inset:0;
+  z-index:3;
+  display:none;
+  pointer-events:none;
+  font-weight:750;
+}
+.scanner-viewport.is-active .scanner-overlay {display:block;}
+.scanner-camera-live {
+  position:absolute;
+  top:12px;
+  left:12px;
+  display:flex;
+  align-items:center;
+  gap:7px;
+  border:1px solid #FFFFFF2B;
+  background:#101f32a6;
+  color:#eaf5ff;
+  border-radius:30px;
+  padding:6px 10px;
+  font-size:9px;
+  letter-spacing:1px;
+  backdrop-filter:blur(4px);
+}
+.scanner-camera-live i {
+  width:6px;
+  height:6px;
+  border-radius:100%;
+  background:#32d5aa;
+  box-shadow:0 0 0 3px #32d5aa33;
+}
+.scanner-reticle {
+  position:absolute;
+  top:50%;left:50%;
+  transform:translate(-50%,-50%);
+  width:min(56%,180px);
+  aspect-ratio:1;
+  border-radius:13px;
+  background:#00000005;
+}
+.scanner-reticle > i {
+  position:absolute;
+  width:24px;height:24px;
+  border:3px solid #b9e4ff;
+  filter:drop-shadow(0 1px 3px #061a28c2);
+}
+.scanner-reticle > i:nth-child(1) {top:0;left:0;border-right:0;border-bottom:0;border-radius:9px 0 0 0}
+.scanner-reticle > i:nth-child(2) {top:0;right:0;border-left:0;border-bottom:0;border-radius:0 9px 0 0}
+.scanner-reticle > i:nth-child(3) {bottom:0;left:0;border-right:0;border-top:0;border-radius:0 0 0 9px}
+.scanner-reticle > i:nth-child(4) {bottom:0;right:0;border-left:0;border-top:0;border-radius:0 0 9px 0}
+.scanner-sweep {
+  position:absolute;
+  left:9px;right:9px;top:15%;
+  height:2px;
+  background:linear-gradient(90deg,transparent,#7fd5ff,transparent);
+  box-shadow:0 0 12px #7fd5ff85;
+  animation:tf-camera-sweep 2.7s ease-in-out infinite alternate;
+}
+.scanner-viewport.is-paused .scanner-sweep {animation-play-state:paused;opacity:.3;}
+@keyframes tf-camera-sweep {to {top:85%;}}
+.scanner-assist {
+  position:absolute;
+  bottom:12px;
+  left:50%;
+  transform:translateX(-50%);
+  color:#f4f9ff;
+  font-size:10px;
+  line-height:1.35;
+  text-align:center;
+  width:max-content;
+  max-width:calc(100% - 20px);
+  background:#101f32b3;
+  border:1px solid #ffffff1f;
+  border-radius:30px;
+  padding:7px 12px;
+  text-wrap:balance;
+}
+#cameraStatus {gap:7px;}
+#cameraStatus:not(.camera-status-live) .pulse-dot {
+  background:#9eafc0;
+  box-shadow:0 0 0 3px #9eafc02b;
+}
+@media(max-width:720px) {
+  .scanner-viewport {
+    height:auto;
+    min-height:0;
+    max-height:315px;
+    aspect-ratio:4/3;
+    border-radius:12px;
+  }
+  .scanner-viewport #scannerViewport {width:min(100%,420px);}
+  .scanner-camera-live {top:9px;left:9px;font-size:8px;padding:5px 8px;}
+  .scanner-reticle {width:min(56%,165px);}
+  .scanner-assist {bottom:8px;font-size:9px;padding:6px 10px;}
+}
+@media(max-width:350px) {
+  .scanner-reticle {width:min(48%,120px);transform:translate(-50%,-58%);}
+  .scanner-assist {font-size:8px;}
+}
+@media(prefers-reduced-motion:reduce) {
+  .scanner-sweep {animation:none;top:50%;}
+}
+
+
+/* ==== v7 • Generated tickets actions and confirmation ==== */
+.recent-list{max-height:255px;scrollbar-width:thin;scrollbar-color:#cbdcf1 transparent;}
+.ticket-search{display:block;width:100%;min-height:36px;margin:11px 0 5px;padding:8px 12px;background:#f8fbff;border:1px solid #dfe9f7;border-radius:9px;color:#2c405a;outline:none;font-size:11px;}
+.ticket-search:focus{border-color:#5791ee;box-shadow:0 0 0 3px #eaf2ff;}
+.search-label{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;}
+.recent-item{display:flex;align-items:stretch;gap:5px;padding:5px 0;border-bottom:1px solid #ecf1f7;background:#fff;min-height:44px;}
+.recent-open{flex:1;min-width:0;background:transparent;border:0;border-radius:8px;display:flex;justify-content:space-between;align-items:center;gap:10px;text-align:left;padding:7px 9px;color:#405775;font-size:10.5px;font-weight:800;}
+.recent-open:hover{background:#f4f8ff;color:#2573db;}
+.recent-code{overflow-wrap:anywhere;min-width:0;}
+.recent-status{font-size:9px;white-space:nowrap;font-weight:700;color:#8c9cb0;}
+.recent-delete{display:inline-flex;align-items:center;justify-content:center;gap:5px;flex:0 0 auto;border:1px solid #f3dfe5;border-radius:8px;background:#fff7f9;color:#b75069;padding:5px 9px;font-size:10px;font-weight:800;}
+.recent-delete:hover{background:#fce8ee;border-color:#eec2cd;color:#a6324e;}
+.recent-delete svg{width:14px;height:14px;}
+.button-danger{background:#c84060;color:#fff;box-shadow:0 5px 16px #be4a641c;}
+.button-danger:hover:not(:disabled){background:#ac3150;}
+.delete-dialog{border:1px solid #e6ebf3;border-radius:20px;padding:29px;width:min(420px,calc(100vw - 28px));color:#293950;background:#fff;box-shadow:0 24px 85px #1b2d4a35;}
+.delete-dialog::backdrop{background:rgba(17,30,51,.57);backdrop-filter:blur(3px);}
+.delete-dialog-icon{width:47px;height:47px;display:grid;place-items:center;background:#fff1f4;border-radius:13px;color:#c84060;}
+.delete-dialog-icon svg{height:25px;width:25px;}
+.delete-dialog h2{margin:17px 0 8px;font-size:20px;font-weight:850;letter-spacing:-.6px;}
+.delete-dialog p{color:#8391a5;font-size:12px;line-height:1.7;margin:0;}
+.delete-target-code{margin:17px 0;padding:13px;background:#f7f9fd;border:1px solid #e6edf6;border-radius:10px;color:#2e4665;font-weight:850;letter-spacing:1px;text-align:center;font-variant-numeric:tabular-nums;}
+.delete-dialog-actions{display:flex;gap:9px;margin-top:17px;}
+.delete-dialog-actions .button{flex:1;white-space:normal;min-width:0;}
+.delete-dialog .delete-message{color:#ba435d;margin-top:11px;min-height:10px;font-size:10px;}
+/* Natural camera ratio: do not crop the image or scale a camera to fill a fixed-height box. */
+.scanner-viewport.is-active{height:auto!important;max-height:none!important;min-height:190px;aspect-ratio:auto!important;padding:0!important;background:#111e30;}
+.scanner-viewport.is-active #scannerViewport{width:min(100%,480px);height:auto!important;max-width:100%;flex:0 1 auto;line-height:0;}
+#app .scanner-viewport #scannerViewport video{width:100%!important;height:auto!important;object-fit:contain!important;max-height:none!important;display:block!important;}
+.scanner-viewport.is-active .scanner-overlay{inset:0;}
+.scanner-viewport.is-active .scanner-reticle{width:min(46%,180px);}
+.scanner-viewport.is-active .scanner-assist{bottom:8px;}
+@media(max-width:720px){
+  .recent-list{max-height:220px;}
+  .scanner-viewport.is-active{min-height:165px;}
+  .scanner-viewport.is-active #scannerViewport{width:100%;}
+  .scanner-viewport.is-active .scanner-reticle{width:min(46%,150px);}
+}
+@media(max-width:400px){
+  .recent-open{padding:7px 4px;gap:5px;font-size:9.5px;}
+  .recent-status{font-size:8px;}
+  .recent-delete{font-size:9px;padding:5px 7px;}
+  .delete-dialog{padding:22px 18px;}
+}
