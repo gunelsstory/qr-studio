@@ -1,7 +1,7 @@
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js';
 import {
   getAuth, signInWithEmailAndPassword, onAuthStateChanged, signOut,
-  setPersistence, inMemoryPersistence
+  setPersistence, browserSessionPersistence
 } from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js';
 import {
   getFirestore, doc, getDoc, collection, query, orderBy,
@@ -34,6 +34,7 @@ function updateCameraView(state) {
 }
 
 let recentTickets = [];
+let admissionRecords = [];
 let pendingDeleteCode = null;
 let deletingTicket = false;
 let pausedForResult = false;
@@ -204,10 +205,62 @@ function downloadQr() {
   }, 'image/png');
 }
 
+
+// Excel hesabatları Firestore-un mövcud realtime məlumatlarından, yalnız oxuma rejimində hazırlanır.
+// QR tokenləri və qrPayload təhlükəsizlik üçün eksport edilmir.
+function ticketSearchMatches() {
+  const term = $('ticketSearch').value.trim().toUpperCase();
+  return recentTickets.filter(item => String(item.data.code || item.id).toUpperCase().includes(term));
+}
+function exportWorksheet(headers, rows, widths, sheetName, filename) {
+  if (typeof window.XLSX === 'undefined') {
+    toast('Excel kitabxanası yüklənmədi. İnternet bağlantısını yoxlayın.');
+    return;
+  }
+  if (!rows.length) { toast('Yükləmək üçün məlumat yoxdur.'); return; }
+  try {
+    const sheet = window.XLSX.utils.aoa_to_sheet([headers, ...rows]);
+    sheet['!cols'] = widths.map(wch => ({ wch }));
+    sheet['!autofilter'] = { ref: window.XLSX.utils.encode_range({ s: { r: 0, c: 0 }, e: { r: rows.length, c: headers.length - 1 } }) };
+    const book = window.XLSX.utils.book_new();
+    window.XLSX.utils.book_append_sheet(book, sheet, sheetName);
+    window.XLSX.writeFile(book, filename, { bookType: 'xlsx', compression: true });
+    toast(`${rows.length} qeyd Excel faylına yükləndi.`);
+  } catch (error) {
+    console.error('Excel export error:', error);
+    toast('Excel faylını yaratmaq mümkün olmadı.');
+  }
+}
+function exportTickets() {
+  const rows = ticketSearchMatches().map(({ id, data }) => [
+    data.code || id,
+    data.used ? 'İstifadə olunub' : 'Aktiv',
+    data.createdAt?.toDate ? formatDate(data.createdAt) : '',
+    data.usedAt?.toDate ? formatDate(data.usedAt) : ''
+  ]);
+  const stamp = new Date().toLocaleDateString('en-CA');
+  exportWorksheet(
+    ['Bilet nömrəsi', 'Status', 'Yaradılma tarixi', 'Giriş tarixi'],
+    rows, [24, 22, 25, 25], 'Yaradılan biletlər', `TicketFlow_Biletler_${stamp}.xlsx`
+  );
+}
+function exportAdmissions() {
+  const rows = admissionRecords.map(({ id, data }) => [
+    data.code || id,
+    data.scannedAt?.toDate ? formatDate(data.scannedAt) : ''
+  ]);
+  const stamp = new Date().toLocaleDateString('en-CA');
+  exportWorksheet(
+    ['Bilet nömrəsi', 'Giriş vaxtı'],
+    rows, [25, 28], 'Daxilolmalar', `TicketFlow_Daxilolmalar_${stamp}.xlsx`
+  );
+}
+
 function renderTicketList() {
   const list = $('recentList');
   const term = $('ticketSearch').value.trim().toUpperCase();
-  const filtered = recentTickets.filter(item => item.data.code.toUpperCase().includes(term));
+  const filtered = ticketSearchMatches();
+  $('exportTicketsBtn').disabled = filtered.length === 0;
   $('recentCount').textContent = term ? `${filtered.length} / ${recentTickets.length}` : `CƏM ${recentTickets.length}`;
   list.replaceChildren();
   if (!filtered.length) {
@@ -316,6 +369,8 @@ function subscribeAdmissions() {
   const q = query(collection(db, CHECKIN_COLLECTION), orderBy('scannedAt', 'desc'));
   unsubscribeAdmissions = onSnapshot(q, snap => {
     checkedInTickets = snap.size;
+    admissionRecords = snap.docs.map(item => ({ id: item.id, data: item.data() }));
+    $('exportAdmissionsBtn').disabled = snap.empty;
     updateStats();
     $('admissionsCount').replaceChildren();
     $('admissionsCount').append(document.createTextNode(String(snap.size)));
@@ -335,7 +390,9 @@ function subscribeAdmissions() {
       row.append(code, time); list.append(row);
     });
   }, error => {
-    checkedInTickets = null; updateStats();
+    checkedInTickets = null; admissionRecords = [];
+    $('exportAdmissionsBtn').disabled = true;
+    updateStats();
     const list = $('admissionsList'); list.textContent = friendlyError(error);
   });
 }
@@ -454,7 +511,9 @@ async function stopScanner() {
 function cleanupSubscriptions() {
   unsubscribeRecent?.(); unsubscribeRecent = null;
   unsubscribeAdmissions?.(); unsubscribeAdmissions = null;
-  totalTickets = null; checkedInTickets = null; recentTickets = [];
+  totalTickets = null; checkedInTickets = null; recentTickets = []; admissionRecords = [];
+  $('exportTicketsBtn').disabled = true;
+  $('exportAdmissionsBtn').disabled = true;
   updateStats();
   renderTicketList();
 }
@@ -472,8 +531,9 @@ if (!configurationOk) {
   const firebaseApp = initializeApp(firebaseConfig);
   auth = getAuth(firebaseApp);
   db = getFirestore(firebaseApp);
-  // Sessiya yalnız cari səhifənin yaddaşındadır; LocalStorage-a login yazılmır.
-  await setPersistence(auth, inMemoryPersistence);
+  // Sessiya eyni brauzer vərəqində yenilənmədən sonra qalır; vərəq bağlananda bitir.
+  // Firebase browserSessionPersistence istifadə olunur, xüsusi localStorage yazılışı yoxdur.
+  await setPersistence(auth, browserSessionPersistence);
   onAuthStateChanged(auth, async user => {
     cleanupSubscriptions();
     if (!user) {
@@ -497,8 +557,11 @@ if (!configurationOk) {
       subscribeRecent();
       subscribeAdmissions();
     } catch (error) {
-      $('loginError').textContent = friendlyError(error);
-      await signOut(auth);
+      // Müvəqqəti Firestore/internet xətası admin sessiyasını məcburi bağlamasın.
+      // Yoxlama uğursuzdursa panel açılmır; əlaqə bərpa olunanda səhifəni yeniləmək olar.
+      $('app').classList.add('hidden');
+      $('authScreen').classList.remove('hidden');
+      $('loginError').textContent = 'Admin statusu yoxlanmadı: ' + friendlyError(error) + ' Yenidən yoxlamaq üçün səhifəni yeniləyin.';
     }
   });
 }
@@ -517,6 +580,8 @@ $('loginForm').addEventListener('submit', async event => {
 $('logoutBtn').addEventListener('click', async () => { await stopScanner(); await signOut(auth); });
 $('generateBtn').addEventListener('click', createNewTicket);
 $('ticketSearch').addEventListener('input', renderTicketList);
+$('exportTicketsBtn').addEventListener('click', exportTickets);
+$('exportAdmissionsBtn').addEventListener('click', exportAdmissions);
 $('cancelDeleteBtn').addEventListener('click', () => $('deleteDialog').close());
 $('confirmDeleteBtn').addEventListener('click', deleteTicket);
 $('deleteDialog').addEventListener('cancel', event => { if (deletingTicket) event.preventDefault(); });
