@@ -1,10 +1,10 @@
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js';
 import {
   getAuth, signInWithEmailAndPassword, onAuthStateChanged, signOut,
-  setPersistence, inMemoryPersistence
+  setPersistence, browserSessionPersistence, inMemoryPersistence
 } from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js';
 import {
-  getFirestore, doc, getDoc, collection, query, orderBy,
+  getFirestore, doc, getDoc, getDocFromServer, collection, query, orderBy,
   onSnapshot, serverTimestamp, runTransaction
 } from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js';
 import { firebaseConfig } from './firebase-config.js';
@@ -14,6 +14,9 @@ import { firebaseConfig } from './firebase-config.js';
 const TICKET_COLLECTION = 'printTickets';
 const CHECKIN_COLLECTION = 'printCheckins';
 const ADMIN_COLLECTION = 'tfAdmins';
+const EVENT_COLLECTION = 'printEvents';
+const AUDIT_COLLECTION = 'printAudit';
+const LEGACY_EVENT = 'legacy';
 const CODE_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // 32 simvol, 0/O və 1/I yoxdur.
 const $ = id => document.getElementById(id);
 
@@ -23,6 +26,7 @@ let unsubscribeRecent = null;
 let unsubscribeAdmissions = null;
 let scanner = null;
 let scannerActive = false;
+let scannerStartNonce = 0;
 let scanningNow = false;
 function updateCameraView(state) {
   const frame = $('scannerFrame');
@@ -34,13 +38,35 @@ function updateCameraView(state) {
 }
 
 let recentTickets = [];
+let allTickets = [];
+let allCheckins = [];
+let eventId = LEGACY_EVENT;
+let eventRecords = [];
+let unsubscribeEvents = null;
+let sessionUid = null;
+let onlineConfirmedAt = 0;
+let heartbeatTimer = null;
+let connectionBusy = false;
+let showTicketLimit = 35;
+let torchOn = false;
 let pendingDeleteCode = null;
 let deletingTicket = false;
 let pausedForResult = false;
 let toastTimeout;
 let totalTickets = null;
 let checkedInTickets = null;
+let ticketsReady = false;
+let admissionsReady = false;
 
+function ticketBelongs(d) { return (d.eventId || LEGACY_EVENT) === eventId; }
+function admissionBelongs(d) { return (d.eventId || LEGACY_EVENT) === eventId; }
+function recalcEventView() {
+  recentTickets = allTickets.filter(item => ticketBelongs(item.data));
+  const admissions = allCheckins.filter(item => admissionBelongs(item.data));
+  totalTickets = ticketsReady && admissionsReady ? recentTickets.length : null;
+  checkedInTickets = ticketsReady && admissionsReady ? admissions.length : null;
+  updateStats(); renderTicketList(); renderAdmissions(admissions);
+}
 function updateStats() {
   const ready = Number.isInteger(totalTickets) && Number.isInteger(checkedInTickets);
   const total = ready ? totalTickets : 0;
@@ -60,6 +86,81 @@ function updateStats() {
   $('donutScanned').setAttribute('aria-label', `${used} yoxlanmış bilet, ${scannedPct} faiz`);
   $('donutAvailable').setAttribute('aria-label', `${unused} aktiv bilet, ${activePct} faiz`);
 }
+function setConnection(state) {
+  const text = state === 'ok' ? 'Firestore ilə bağlı' : state === 'down' ? 'Bağlantı yoxdur' : 'Bağlantı yoxlanılır';
+  $('connectionText').textContent = text;
+  $('connectionStatus').dataset.state = state;
+}
+async function requireConnection() {
+  if (!navigator.onLine) { setConnection('down'); throw new Error('OFFLINE'); }
+  if (!auth?.currentUser || !sessionUid) throw new Error('ADMIN_REQUIRED');
+  try {
+    // Server oxunuşu: cache-dən "uğur" təsdiqi qəbul edilmir.
+    const admin = await getDocFromServer(doc(db, ADMIN_COLLECTION, sessionUid));
+    if (!admin.exists() || admin.data().active !== true) throw new Error('ADMIN_REQUIRED');
+    onlineConfirmedAt = Date.now(); setConnection('ok');
+  } catch(error) { setConnection('down'); throw error; }
+}
+function watchConnection() {
+  clearInterval(heartbeatTimer);
+  heartbeatTimer = setInterval(async () => {
+    if (connectionBusy || !sessionUid) return;
+    connectionBusy = true;
+    try { await requireConnection(); } catch { /* status is shown */ }
+    finally { connectionBusy = false; }
+  }, 45000);
+}
+function updateEventNotice() {
+  const name = eventId === LEGACY_EVENT ? 'Əvvəlki biletlər (TF1)' : eventRecords.find(e => e.id === eventId)?.name || 'Tədbir seçilməyib';
+  $('eventNotice').textContent = eventId === LEGACY_EVENT
+    ? 'Köhnə biletlər yalnız bu rejimdə keçərlidir. Yeni QR yaratmaq üçün yeni tədbir seçin.'
+    : `Seçilən tədbir: ${name}. Generator və QR skaner yalnız bu tədbirin biletləri ilə işləyir.`;
+  $('generateBtn').disabled = eventId === LEGACY_EVENT;
+}
+function setEvent(nextId) {
+  if (eventId === nextId) return;
+  if (scannerActive || scanner) stopScanner();
+  eventId = nextId;
+  showTicketLimit = 35;
+  $('ticketSearch').value = '';
+  clearGeneratedTicket();
+  updateEventNotice(); recalcEventView();
+}
+function subscribeEvents() {
+  unsubscribeEvents?.();
+  unsubscribeEvents = onSnapshot(collection(db, EVENT_COLLECTION), snap => {
+    eventRecords = snap.docs.map(d => ({ id: d.id, ...d.data() })).sort((a,b) => (a.name||'').localeCompare(b.name||'', 'az'));
+    const selector = $('eventSelect');
+    const original = eventId;
+    selector.replaceChildren(new Option('Əvvəlki biletlər (TF1)', LEGACY_EVENT));
+    for (const ev of eventRecords) if (ev.status === 'active') selector.add(new Option(ev.name, ev.id));
+    if (original !== LEGACY_EVENT && !eventRecords.some(e => e.id === original && e.status === 'active')) eventId = LEGACY_EVENT;
+    selector.value = eventId;
+    updateEventNotice(); recalcEventView();
+  }, err => { $('eventNotice').textContent = friendlyError(err); });
+}
+async function createEvent(e) {
+  e.preventDefault();
+  const name = $('eventName').value.trim().replace(/\s+/g, ' ');
+  if (name.length < 3 || name.length > 80) { $('eventError').textContent = 'Tədbir adı 3–80 simvol olmalıdır.'; return; }
+  $('eventError').textContent = '';
+  $('saveEventBtn').disabled = true;
+  try {
+    await requireConnection();
+    const id = 'EV-' + Array.from(crypto.getRandomValues(new Uint8Array(10)), v => CODE_CHARS[v % CODE_CHARS.length]).join('');
+    await runTransaction(db, async tx => {
+      const r = doc(db, EVENT_COLLECTION, id);
+      if ((await tx.get(r)).exists()) throw new Error('CODE_COLLISION');
+      tx.set(r, { name, status:'active', createdBy:sessionUid, createdAt:serverTimestamp() });
+    });
+    if (!eventRecords.some(record => record.id === id)) eventRecords.push({ id, name, status:'active' });
+    if (!$('eventSelect').querySelector(`option[value="${id}"]`)) $('eventSelect').add(new Option(name, id));
+    $('eventSelect').value = id; setEvent(id);
+    $('eventDialog').close(); $('eventName').value = '';
+    toast('Tədbir yaradıldı. Yeni biletlər bu tədbirə bağlanacaq.');
+  } catch (err) { $('eventError').textContent = friendlyError(err); }
+  finally { $('saveEventBtn').disabled = false; }
+}
 
 function toast(message) {
   $('toast').textContent = message;
@@ -68,6 +169,9 @@ function toast(message) {
   toastTimeout = setTimeout(() => $('toast').classList.add('hidden'), 3300);
 }
 function friendlyError(error) {
+  if (error?.message === 'OFFLINE') return 'İnternet/Firestore bağlantısı yoxdur. Giriş təsdiqlənmir.';
+  if (error?.message === 'ADMIN_REQUIRED') return 'Aktiv admin icazəsi yoxdur. Yenidən giriş edin.';
+  if (error?.message === 'WRONG_EVENT') return 'Bu QR seçilən tədbirə aid deyil. Tədbiri yoxlayın.';
   if (error?.code === 'permission-denied') return 'Firestore icazəsi yoxdur. Rules və admin statusunu yoxlayın.';
   if (error?.code === 'unavailable') return 'Firestore ilə əlaqə qurulmadı. İnterneti yoxlayın.';
   if (error?.code === 'auth/invalid-credential') return 'E-poçt və ya şifrə yanlışdır.';
@@ -132,26 +236,28 @@ function displayTicket(data) {
 }
 
 async function createNewTicket() {
+  if (eventId === LEGACY_EVENT) { toast('Əvvəlcə yeni tədbir yaradın və seçin.'); return; }
   setGenerateLoading(true);
   $('generateMessage').textContent = 'Unikal bilet yaradılır və Firestore-a yazılır...';
   try {
+    await requireConnection();
+    const createdEvent = eventId;
     for (let attempt = 0; attempt < 5; attempt++) {
       const code = codeFromCrypto();
       const qrToken = tokenFromCrypto();
-      const qrPayload = `TF1|${code}|${qrToken}`;
+      const qrPayload = `TF2|${code}|${createdEvent}|${qrToken}`;
       const ticketRef = doc(db, TICKET_COLLECTION, code);
       try {
         await runTransaction(db, async tx => {
           const existing = await tx.get(ticketRef);
           if (existing.exists()) throw new Error('CODE_COLLISION');
           tx.set(ticketRef, {
-            code, qrToken, qrPayload,
-            used: false, usedAt: null,
-            createdAt: serverTimestamp()
+            code, qrToken, qrPayload, eventId:createdEvent, createdBy:sessionUid,
+            used: false, usedAt: null, createdAt: serverTimestamp()
           });
         });
         // Bilet yalnız bazada uğurla yaradıldıqdan SONRA göstərilir.
-        displayTicket({ code, qrToken, qrPayload, used: false });
+        if (eventId === createdEvent) displayTicket({ code, qrToken, qrPayload, eventId:createdEvent, used: false });
         $('generateMessage').textContent = '✓ Yeni bilet Firestore-da uğurla saxlanıldı.';
         toast(`${code} — yeni QR yaradıldı.`);
         return;
@@ -165,7 +271,7 @@ async function createNewTicket() {
     $('generateMessage').textContent = friendlyError(error);
     toast('Yaradılmadı: ' + friendlyError(error));
   } finally {
-    setGenerateLoading(false);
+    setGenerateLoading(false); updateEventNotice();
   }
 }
 
@@ -207,7 +313,9 @@ function downloadQr() {
 function renderTicketList() {
   const list = $('recentList');
   const term = $('ticketSearch').value.trim().toUpperCase();
-  const filtered = recentTickets.filter(item => item.data.code.toUpperCase().includes(term));
+  const filtered = recentTickets.filter(item => String(item.data.code || item.id).toUpperCase().includes(term));
+  const visible = filtered.slice(0, showTicketLimit);
+  $('moreTicketsBtn').classList.toggle('hidden', filtered.length <= showTicketLimit);
   $('recentCount').textContent = term ? `${filtered.length} / ${recentTickets.length}` : `CƏM ${recentTickets.length}`;
   list.replaceChildren();
   if (!filtered.length) {
@@ -218,7 +326,7 @@ function renderTicketList() {
     return;
   }
   const fragment = document.createDocumentFragment();
-  for (const item of filtered) {
+  for (const item of visible) {
     const data = item.data;
     const row = document.createElement('div');
     row.className = 'recent-item';
@@ -257,26 +365,39 @@ function openDeleteDialog(code) {
   if (deletingTicket) return;
   pendingDeleteCode = code;
   $('deleteTargetCode').textContent = code;
+  const existing = recentTickets.find(t => t.id === code)?.data;
+  $('confirmUsedDelete').checked = false;
+  $('usedTicketConfirmWrap').classList.toggle('hidden', !existing?.used);
+  $('confirmDeleteBtn').disabled = Boolean(existing?.used);
   $('deleteMessage').textContent = '';
   $('deleteDialog').showModal();
 }
 async function deleteTicket() {
   if (!pendingDeleteCode || deletingTicket) return;
   const code = pendingDeleteCode;
+  if (!$('usedTicketConfirmWrap').classList.contains('hidden') && !$('confirmUsedDelete').checked) return;
   deletingTicket = true;
   $('confirmDeleteBtn').disabled = true;
   $('cancelDeleteBtn').disabled = true;
   $('confirmDeleteBtn').textContent = 'Silinir...';
   $('deleteMessage').textContent = 'Firestore qeydləri silinir...';
   try {
+    await requireConnection();
     const ticketRef = doc(db, TICKET_COLLECTION, code);
     const checkinRef = doc(db, CHECKIN_COLLECTION, code);
+    const auditRef = doc(db, AUDIT_COLLECTION, code);
     // Hər iki sənəd eyni atomik tranzaksiyada silinir. Oxunmuş biletin
     // daxilolma qeydi də silinir; şəbəkə xətasında heç biri silinmir.
     await runTransaction(db, async tx => {
       const ticketSnap = await tx.get(ticketRef);
       const checkinSnap = await tx.get(checkinRef);
+      const auditSnap = await tx.get(auditRef);
       if (!ticketSnap.exists()) throw new Error('NOT_FOUND');
+      if (auditSnap.exists()) throw new Error('ALREADY_DELETED');
+      const previous = ticketSnap.data();
+      if (previous.used && !$('confirmUsedDelete').checked) throw new Error('USED_REQUIRES_ACK');
+      tx.set(auditRef, { code, eventId: previous.eventId || LEGACY_EVENT, usedBefore: !!previous.used,
+        deletedBy:sessionUid, deletedAt:serverTimestamp() });
       tx.delete(ticketRef);
       if (checkinSnap.exists()) tx.delete(checkinRef);
     });
@@ -296,48 +417,49 @@ async function deleteTicket() {
 }
 function subscribeRecent() {
   unsubscribeRecent?.();
-  // Bütün biletlər siyahı və statistikalar üçün real vaxtda dinlənir.
   const q = query(collection(db, TICKET_COLLECTION), orderBy('createdAt', 'desc'));
-  unsubscribeRecent = onSnapshot(q, snap => {
-    totalTickets = snap.size;
-    recentTickets = snap.docs.map(item => ({ id: item.id, data: item.data() }));
-    updateStats();
-    renderTicketList();
+  unsubscribeRecent = onSnapshot(q, { includeMetadataChanges:true }, snap => {
+    allTickets = snap.docs.map(item => ({ id:item.id, data:item.data() }));
+    ticketsReady = true; recalcEventView();
+    if (!snap.metadata.fromCache && navigator.onLine) setConnection('ok');
   }, error => {
-    totalTickets = null;
-    recentTickets = [];
-    updateStats();
-    $('generateMessage').textContent = friendlyError(error);
-    renderTicketList();
+    totalTickets = null; ticketsReady=false; allTickets = []; recentTickets = [];
+    updateStats(); $('generateMessage').textContent = friendlyError(error);
+    renderTicketList(); setConnection('down');
   });
+}
+function renderAdmissions(admissions) {
+  $('admissionsCount').replaceChildren();
+  $('admissionsCount').append(document.createTextNode(String(admissions.length)));
+  const suffix = document.createElement('span'); suffix.textContent = ' bilet';
+  $('admissionsCount').append(suffix);
+  const list = $('admissionsList'); list.replaceChildren();
+  if (!admissions.length) {
+    const row = document.createElement('div'); row.className='empty-admissions';
+    row.textContent='Bu tədbirdə təsdiqlənmiş giriş yoxdur.';list.append(row);return;
+  }
+  const fragment = document.createDocumentFragment();
+  for (const item of admissions.slice(0,75)) {
+    const record = item.data;
+    const row = document.createElement('div'); row.className = 'admission-row';
+    const code = document.createElement('span'); code.className='admission-code'; code.textContent = record.code;
+    const time = document.createElement('span'); time.className='admission-date'; time.textContent=formatDate(record.scannedAt);
+    row.append(code,time); fragment.append(row);
+  }
+  list.append(fragment);
+  if (admissions.length > 75) {
+    const note = document.createElement('div'); note.className='empty-admissions';
+    note.textContent=`Son 75 giriş göstərilir; ümumi: ${admissions.length}.`; list.append(note);
+  }
 }
 function subscribeAdmissions() {
   unsubscribeAdmissions?.();
   const q = query(collection(db, CHECKIN_COLLECTION), orderBy('scannedAt', 'desc'));
-  unsubscribeAdmissions = onSnapshot(q, snap => {
-    checkedInTickets = snap.size;
-    updateStats();
-    $('admissionsCount').replaceChildren();
-    $('admissionsCount').append(document.createTextNode(String(snap.size)));
-    const suffix = document.createElement('span'); suffix.textContent = ' bilet';
-    $('admissionsCount').append(suffix);
-    const list = $('admissionsList');
-    list.replaceChildren();
-    if (snap.empty) {
-      const p = document.createElement('div'); p.className = 'empty-admissions';
-      p.textContent = 'Hələ təsdiqlənmiş giriş yoxdur.'; list.append(p); return;
-    }
-    snap.forEach(item => {
-      const record = item.data();
-      const row = document.createElement('div'); row.className = 'admission-row';
-      const code = document.createElement('span'); code.className = 'admission-code'; code.textContent = record.code;
-      const time = document.createElement('span'); time.className = 'admission-date'; time.textContent = formatDate(record.scannedAt);
-      row.append(code, time); list.append(row);
-    });
-  }, error => {
-    checkedInTickets = null; updateStats();
-    const list = $('admissionsList'); list.textContent = friendlyError(error);
-  });
+  unsubscribeAdmissions = onSnapshot(q, { includeMetadataChanges:true }, snap => {
+    allCheckins = snap.docs.map(d => ({id:d.id,data:d.data()}));
+    admissionsReady = true; recalcEventView();
+    if (!snap.metadata.fromCache && navigator.onLine) setConnection('ok');
+  }, error => { checkedInTickets=null; admissionsReady=false; allCheckins=[]; updateStats(); $('admissionsList').textContent=friendlyError(error); setConnection('down'); });
 }
 function scanFeedback(kind, message) {
   const feedback = $('scanFeedback');
@@ -347,48 +469,58 @@ function scanFeedback(kind, message) {
 async function checkQr(decodedText) {
   if (scanningNow) return;
   scanningNow = true;
+  $('eventSelect').disabled = true;
   pausedForResult = true;
-  try { scanner?.pause(true); } catch { /* başqa bir keçid zamanı dayandırılmış ola bilər */ }
+  try { scanner?.pause(true); } catch { /* camera changing state */ }
   updateCameraView('paused');
-  scanFeedback('warning', 'QR yoxlanılır. Firestore ilə əlaqə qurulur...');
+  scanFeedback('warning', 'QR yoxlanılır — serverin təsdiqi gözlənilir...');
   try {
-    const match = /^TF1\|(TF-[A-Z2-9]{4}-[A-Z2-9]{4}-[A-Z2-9]{4})\|([A-Za-z0-9_-]{32})$/.exec(decodedText);
-    if (!match) throw new Error('INVALID_QR');
-    const [, code, providedToken] = match;
+    await requireConnection();
+    const legacyMatch = /^TF1\|(TF-[A-Z2-9]{4}-[A-Z2-9]{4}-[A-Z2-9]{4})\|([A-Za-z0-9_-]{32})$/.exec(decodedText);
+    const newMatch = /^TF2\|(TF-[A-Z2-9]{4}-[A-Z2-9]{4}-[A-Z2-9]{4})\|(EV-[A-Z2-9]{10})\|([A-Za-z0-9_-]{32})$/.exec(decodedText);
+    if (!legacyMatch && !newMatch) throw new Error('INVALID_QR');
+    const code = newMatch ? newMatch[1] : legacyMatch[1];
+    const qrEvent = newMatch ? newMatch[2] : LEGACY_EVENT;
+    const token = newMatch ? newMatch[3] : legacyMatch[2];
+    if (qrEvent !== eventId) throw new Error('WRONG_EVENT');
     const ticketRef = doc(db, TICKET_COLLECTION, code);
     const checkinRef = doc(db, CHECKIN_COLLECTION, code);
     await runTransaction(db, async tx => {
-      // Firestore transaction: bütün OXUMALAR yazmalardan ƏVVƏL.
       const ticketSnap = await tx.get(ticketRef);
       const checkinSnap = await tx.get(checkinRef);
       if (!ticketSnap.exists()) throw new Error('NOT_FOUND');
       const ticket = ticketSnap.data();
-      if (ticket.qrToken !== providedToken || ticket.qrPayload !== decodedText) throw new Error('INVALID_QR');
+      if ((ticket.eventId || LEGACY_EVENT) !== eventId) throw new Error('WRONG_EVENT');
+      if (ticket.qrToken !== token || ticket.qrPayload !== decodedText) throw new Error('INVALID_QR');
       if (ticket.used || checkinSnap.exists()) throw new Error('ALREADY_USED');
-      tx.update(ticketRef, { used: true, usedAt: serverTimestamp() });
-      tx.set(checkinRef, { code, scannedAt: serverTimestamp() });
+      tx.update(ticketRef, { used:true, usedAt:serverTimestamp() });
+      const checkin = { code, scannedAt:serverTimestamp() };
+      if (qrEvent !== LEGACY_EVENT) { checkin.eventId = qrEvent; checkin.scannedBy = sessionUid; }
+      tx.set(checkinRef, checkin);
     });
-    scanFeedback('ok', `✓ BİLET TƏSDİQLƏNDİ\n${code}\nGiriş uğurla qeydə alındı.`);
-    if (currentTicket?.code === code) currentTicket.used = true;
+    scanFeedback('ok', `✓ BİLET TƏSDİQLƏNDİ\n${code}\nGiriş serverdə qeydə alındı.`);
     if (currentTicket?.code === code) {
-      $('ticketState').textContent = 'İSTİFADƏ OLUNUB';
-      $('ticketState').className = 'chip chip-muted';
-      $('ticketMeta').textContent = 'Bu bilet artıq istifadə olunub. Eyni QR ikinci dəfə qəbul edilmir.';
+      currentTicket.used = true;
+      $('ticketState').textContent='İSTİFADƏ OLUNUB';
+      $('ticketState').className='chip chip-muted';
+      $('ticketMeta').textContent='Bu QR artıq istifadə olunub.';
     }
-  } catch (error) {
-    if (error.message === 'ALREADY_USED') scanFeedback('error', '✕ BİLET ARTIQ OXUNUB\nBu QR ilə ikinci giriş mümkün deyil.');
-    else if (error.message === 'INVALID_QR' || error.message === 'NOT_FOUND') scanFeedback('error', '✕ ETİBARSIZ BİLET\nBu QR sistemdə qeydiyyatda deyil və ya məlumatı uyğun gəlmir.');
-    else scanFeedback('error', `✕ YOXLAMA BAŞ TUTMADI\n${friendlyError(error)}\nİnterneti yoxlayın və yenidən oxudun.`);
+  } catch(error) {
+    if (error.message === 'ALREADY_USED') scanFeedback('error','✕ BİLET ARTIQ OXUNUB\nİkinci giriş mümkün deyil.');
+    else if (error.message === 'WRONG_EVENT') scanFeedback('error','✕ BAŞQA TƏDBİRİN BİLETİ\nDüzgün tədbiri seçin.');
+    else if (['INVALID_QR','NOT_FOUND'].includes(error.message)) scanFeedback('error','✕ ETİBARSIZ BİLET\nQR bu tədbirin qeydiyyatında tapılmadı.');
+    else scanFeedback('error', `✕ YOXLAMA BAŞ TUTMADI\n${friendlyError(error)}\nGiriş qeydə alınmadı.`);
   } finally {
     scanningNow = false;
-    if (scannerActive) {
-      $('nextScanBtn').classList.remove('hidden');
-      $('startScanBtn').classList.add('hidden');
-    }
+    $('eventSelect').disabled = false;
+    if (scannerActive) { $('nextScanBtn').classList.remove('hidden');$('startScanBtn').classList.add('hidden'); }
   }
 }
 async function startScanner() {
-  if (scannerActive) return;
+  if (scannerActive || scanner) return;
+  const nonce = ++scannerStartNonce;
+  try { await requireConnection(); } catch (error) { scanFeedback('error', friendlyError(error)); return; }
+  if (nonce !== scannerStartNonce || !sessionUid) return;
   if (!window.isSecureContext) {
     scanFeedback('error', 'Kamera yalnız HTTPS və ya localhost üzərindən işləyir.'); return;
   }
@@ -402,17 +534,25 @@ async function startScanner() {
     scanner = new window.Html5Qrcode('scannerViewport', {
       formatsToSupport: [window.Html5QrcodeSupportedFormats.QR_CODE], verbose: false
     });
-    // Kamera öz təbii en/hündürlük nisbətində göstərilir; süni 4:3 kəsmə yoxdur.
-    // Bütün görüntü skan olunur, ekrandakı nişan yalnız vizual bələdçidir.
+    // Kitabxananın daxilindəki real QR scan çərçivəsi video pikseli ilə üst-üstə düşür.
     await scanner.start({ facingMode: 'environment' }, {
-      fps: 12
-    }, checkQr, () => { /* Kod olmayan kadrlarda xəta göstərilmir. */ });
+      fps: 12, qrbox: (width,height) => {
+        const size = Math.min(270, Math.max(90, Math.floor(Math.min(width,height)*0.66)));
+        return { width:size, height:size };
+      }
+    }, checkQr, () => {});
+    if (nonce !== scannerStartNonce || !sessionUid) {
+      try { await scanner.stop(); scanner.clear(); } catch { /* stop on logout/switch */ }
+      scanner = null;
+      return;
+    }
     scannerActive = true;
     pausedForResult = false;
     $('scannerPlaceholder').classList.add('hidden');
     updateCameraView('live');
     $('scanFeedback').classList.add('hidden');
     $('stopScanBtn').classList.remove('hidden');
+    try { const caps=scanner.getRunningTrackCapabilities(); $('torchBtn').classList.toggle('hidden', !caps.torch); } catch { $('torchBtn').classList.add('hidden'); }
     $('startScanBtn').classList.add('hidden');
   } catch (error) {
     updateCameraView('idle');
@@ -435,6 +575,7 @@ function nextScan() {
   } catch { toast('Kamera bərpa edilə bilmədi. Yenidən açın.'); }
 }
 async function stopScanner() {
+  ++scannerStartNonce;
   if (scanner) {
     try { if (scannerActive) await scanner.stop(); } catch { /* ignore */ }
     try { scanner.clear(); } catch { /* ignore */ }
@@ -444,6 +585,7 @@ async function stopScanner() {
   pausedForResult = false;
   scanningNow = false;
   $('scannerViewport').replaceChildren();
+  $('torchBtn').classList.add('hidden'); torchOn=false; $('torchBtn').textContent='İşıqlandırma';
   updateCameraView('idle');
   $('scannerPlaceholder').classList.remove('hidden');
   $('startScanBtn').classList.remove('hidden');
@@ -454,7 +596,12 @@ async function stopScanner() {
 function cleanupSubscriptions() {
   unsubscribeRecent?.(); unsubscribeRecent = null;
   unsubscribeAdmissions?.(); unsubscribeAdmissions = null;
+  unsubscribeEvents?.(); unsubscribeEvents = null;
+  clearInterval(heartbeatTimer); heartbeatTimer = null; sessionUid=null;
+  eventId=LEGACY_EVENT; allTickets=[];allCheckins=[]; ticketsReady=false;admissionsReady=false;
+  $('eventSelect').replaceChildren(new Option('Əvvəlki biletlər (TF1)',LEGACY_EVENT));
   totalTickets = null; checkedInTickets = null; recentTickets = [];
+  setConnection('checking'); updateEventNotice();
   updateStats();
   renderTicketList();
 }
@@ -472,8 +619,9 @@ if (!configurationOk) {
   const firebaseApp = initializeApp(firebaseConfig);
   auth = getAuth(firebaseApp);
   db = getFirestore(firebaseApp);
-  // Sessiya yalnız cari səhifənin yaddaşındadır; LocalStorage-a login yazılmır.
-  await setPersistence(auth, inMemoryPersistence);
+  // Cari tab sessiyasında giriş saxlanılır; localStorage istifadə edilmir.
+  try { await setPersistence(auth, browserSessionPersistence); }
+  catch { await setPersistence(auth, inMemoryPersistence); }
   onAuthStateChanged(auth, async user => {
     cleanupSubscriptions();
     if (!user) {
@@ -484,7 +632,7 @@ if (!configurationOk) {
       return;
     }
     try {
-      const admin = await getDoc(doc(db, ADMIN_COLLECTION, user.uid));
+      const admin = await getDocFromServer(doc(db, ADMIN_COLLECTION, user.uid));
       if (!admin.exists() || admin.data().active !== true) {
         $('loginError').textContent = 'Bu hesab aktiv TicketFlow administratoru deyil.';
         await signOut(auth);
@@ -494,7 +642,8 @@ if (!configurationOk) {
       $('app').classList.remove('hidden');
       $('loginError').textContent = '';
       $('userLabel').textContent = user.email || 'Operator';
-      subscribeRecent();
+      sessionUid=user.uid; onlineConfirmedAt=Date.now();setConnection('ok'); watchConnection();
+      subscribeEvents(); subscribeRecent();
       subscribeAdmissions();
     } catch (error) {
       $('loginError').textContent = friendlyError(error);
@@ -526,3 +675,35 @@ $('downloadBtn').addEventListener('click', downloadQr);
 $('startScanBtn').addEventListener('click', startScanner);
 $('nextScanBtn').addEventListener('click', nextScan);
 $('stopScanBtn').addEventListener('click', stopScanner);
+
+// v8: Tədbir yaratma və operatorun kamerası.
+$('eventSelect').addEventListener('change', e => setEvent(e.target.value));
+$('addEventBtn').addEventListener('click', () => { $('eventError').textContent=''; $('eventDialog').showModal(); });
+$('cancelEventBtn').addEventListener('click', () => $('eventDialog').close());
+$('eventForm').addEventListener('submit', createEvent);
+$('moreTicketsBtn').addEventListener('click', () => { showTicketLimit += 35;renderTicketList(); });
+$('confirmUsedDelete').addEventListener('change', e => { $('confirmDeleteBtn').disabled=!e.target.checked; });
+$('torchBtn').addEventListener('click', async () => {
+  if (!scanner || !scannerActive) return;
+  try { torchOn=!torchOn; await scanner.applyVideoConstraints({advanced:[{torch:torchOn}]});
+    $('torchBtn').textContent=torchOn?'İşığı söndür':'İşıqlandırma'; }
+  catch { torchOn=false;$('torchBtn').classList.add('hidden');toast('İşıqlandırma bu cihazda dəstəklənmir.'); }
+});
+window.addEventListener('offline', () => setConnection('down'));
+window.addEventListener('online', () => { if(sessionUid) requireConnection().catch(()=>{}); });
+updateEventNotice();
+
+function downloadAdmissionsCsv() {
+  const records = allCheckins.filter(item => admissionBelongs(item.data));
+  if (!records.length) { toast('Bu tədbirdə CSV üçün daxilolma yoxdur.'); return; }
+  const enc = v => '"' + String(v ?? '').replaceAll('"','""').replace(/^[=+@\-]/, "'$&") + '"';
+  const rows = [['Bilet nömrəsi','Giriş vaxtı','Tədbir','Operator UID'],
+    ...records.map(({data}) => [data.code, formatDate(data.scannedAt), eventId, data.scannedBy || ''])];
+  const csv = '\uFEFF' + rows.map(row => row.map(enc).join(',')).join('\r\n');
+  const blob = new Blob([csv], {type:'text/csv;charset=utf-8'});
+  const url = URL.createObjectURL(blob); const link = document.createElement('a');
+  link.href=url;link.download=`TicketFlow-${eventId}-Daxilolmalar.csv`;
+  document.body.append(link);link.click();link.remove();setTimeout(()=>URL.revokeObjectURL(url),2000);
+  toast('Daxilolmalar CSV faylı yükləndi.');
+}
+$('exportCsvBtn').addEventListener('click', downloadAdmissionsCsv);
