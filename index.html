@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="az"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#f4f7fb">
+<meta name="description" content="TicketFlow QR Studio — çap biletlərinin yaradılması, QR yoxlama və Excel reyestri.">
+<title>TicketFlow — Studio One</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="./style.css?v=10.1"></head><body>
+<div id="auth" class="auth-screen">
+ <form id="loginForm" class="login-panel">
+  <span class="eyebrow"><span class="dot"></span> ADMIN ACCESS</span>
+  <h1>Yenidən xoş gəldiniz.</h1><p>QR Studio-ya mövcud TicketFlow administrator hesabınızla daxil olun.</p>
+  <label for="email">E-poçt</label><input id="email" type="email" required autocomplete="username" placeholder="E-poçt ünvanınız">
+  <label for="password">Şifrə</label><input id="password" type="password" required autocomplete="current-password" placeholder="Şifrəniz">
+  <button id="loginBtn" class="btn btn-primary btn-wide" type="submit">Sistemə daxil ol <span>↗</span></button>
+  <p id="loginError" class="error-msg" role="alert"></p><p class="login-foot">Qorunan giriş · Firebase Authentication</p>
+ </form>
+</div>
+<div id="app" class="app hidden">
+ <aside class="sidebar">
+  <div class="identity"><div class="logo-surface"><img src="./logo.png" alt="TicketFlow" onerror="this.style.display='none';this.nextElementSibling.style.display='block'"><span class="logo-fallback">TicketFlow</span></div><div class="brand-sub">QR STUDIO <span>/</span> ONE</div></div>
+  <div class="nav-caption">İDARƏETMƏ</div>
+  <nav class="nav" aria-label="Əsas bölmələr">
+   <button class="nav-link active" data-view="overview" type="button"><span class="nav-glyph">◫</span><span>İcmal və generator</span></button>
+   <button class="nav-link" data-view="tickets" type="button"><span class="nav-glyph">▤</span><span>Bilet reyestri</span><span id="navTicketCount" class="nav-amount">0</span></button>
+   <button class="nav-link" data-view="scanner" type="button"><span class="nav-glyph">▦</span><span>QR skaneri</span></button>
+   <button class="nav-link" data-view="admissions" type="button"><span class="nav-glyph">✓</span><span>Daxilolmalar</span></button>
+  </nav>
+  <div class="sidebar-bottom"><div class="sidebar-note"><span class="note-icon">✧</span><strong>Cloud-synced workspace</strong><p>Firebase ayarlarını dəyişmədən mövcud bilet qeydləri ilə işləyir.</p></div><span class="sidebar-version">TICKETFLOW STUDIO / V10</span></div>
+ </aside>
+ <div class="main-area">
+  <header class="topbar"><div class="topbar-intro"><span class="topbar-kicker">TICKET OPERATIONS</span><strong id="headerTitle">İcmal və generator</strong></div>
+   <div class="header-right"><div id="connectionStatus" class="connection-pill" data-state="waiting"><span class="dot"></span><span id="connectionText">Yoxlanılır</span></div><span id="userLabel" class="user-label"></span><button class="btn btn-soft btn-logout" id="logoutBtn" type="button">Çıxış ↗</button></div>
+  </header>
+  <main class="main">
+   <section class="event-toolbar" aria-label="Tədbir seçimi"><div><span class="field-kicker">İŞ MƏKANI</span><strong>Aktiv tədbir / bilet qrupu</strong></div><div class="event-toolbar-actions"><label for="eventSelect" class="visually-hidden">Tədbir seç</label><select id="eventSelect" class="select-control"><option value="legacy">Əvvəlki biletlər · TF1</option></select><span id="eventMode" class="event-mode">TF1 QR</span></div></section>
+   <section class="view" id="view-overview">
+    <div class="hero"><div><span class="hero-tag"><span class="dot"></span> LIVE TICKET CONTROL</span><h1>Bilet idarəetməsi,<br><em>sadə və dəqiq.</em></h1><p>Unikal kod yaradın, QR-ni çap üçün yükləyin və daxilolmaları real vaxtda idarə edin.</p></div><div class="hero-visual" aria-hidden="true"><div class="hero-big-ring"><span>◈</span><small>QR CONTROL</small></div></div></div>
+    <div class="section-row"><div><span class="field-kicker">CANLI ANALİTİKA</span><h2>Biletlərə ümumi baxış</h2></div><span id="statsHint" class="muted-caption">Server məlumatları gözlənilir</span></div>
+    <div class="stats-grid">
+      <article class="stat-card"><div class="stat-head"><span>Yaradılan biletlər</span><span class="stat-symbol blue">▤</span></div><div class="stat-main"><div id="ringTotal" class="ring blue-ring"><strong id="statTotal">—</strong><small>Ümumi</small></div><div><strong>Ümumi qeydiyyat</strong><p>Bütün çap biletləri</p><span class="stat-foot">Sistemdə olan biletlər</span></div></div></article>
+      <article class="stat-card"><div class="stat-head"><span>Daxilolmalar</span><span class="stat-symbol green">✓</span></div><div class="stat-main"><div id="ringScanned" class="ring green-ring"><strong id="statScanned">—</strong><small>Oxunan</small></div><div><strong>Təsdiqlənmiş giriş</strong><p>Birdəfəlik QR yoxlaması</p><span class="stat-foot"><b id="scanPercent">0%</b> istifadə olunub</span></div></div></article>
+      <article class="stat-card"><div class="stat-head"><span>Aktiv biletlər</span><span class="stat-symbol graphite">◉</span></div><div class="stat-main"><div id="ringActive" class="ring graphite-ring"><strong id="statActive">—</strong><small>Aktiv</small></div><div><strong>Giriş gözləyənlər</strong><p>Hələ oxunmayan biletlər</p><span class="stat-foot"><b id="activePercent">0%</b> aktiv qalıb</span></div></div></article>
+    </div>
+    <div class="workspace-grid">
+      <article class="panel"><div class="panel-head"><div><span class="field-kicker">01 / GENERATOR</span><h2>Yeni bilet yarat</h2><p>Hər klikdə yeni unikal kod və QR hazırlanır.</p></div><span class="panel-icon">＋</span></div>
+       <div class="generator-settings"><div class="generator-message"><span class="generator-star">✦</span><div><strong>Yeni QR · Bir qeyd</strong><small>Hər bilet ayrıca Firestore sənədi kimi saxlanılır.</small></div></div><button id="generateBtn" class="btn btn-primary btn-wide" type="button">＋ &nbsp; New Generate <span>↗</span></button><p id="generateMessage" class="muted-caption" aria-live="polite">Hazırdır. Bilet yaratmaq üçün düyməni basın.</p></div>
+       <div class="inline-info"><span>◈</span> Şifrə/token yalnız QR daxilindədir; bilet nömrəsi ayrıca kopyalanır.</div>
+      </article>
+      <article class="panel"><div class="panel-head"><div><span class="field-kicker">02 / QR PREVIEW</span><h2>Çap üçün QR</h2><p>Kodu kopyala və yüksək keyfiyyətli PNG yüklə.</p></div><span id="ticketState" class="pill">HAZIR DEYİL</span></div>
+       <div class="preview-body"><div class="qr-holder"><div id="qrcode"></div><div id="qrEmpty" class="qr-empty"><span>▦</span><small>QR PREVIEW</small></div></div><div class="ticket-detail"><span class="field-kicker">UNİKAL BİLET NÖMRƏSİ</span><strong id="ticketNumber">TF-••••-••••-••••</strong><p id="ticketMeta">Yeni bilet yaradıldıqda QR burada görünəcək.</p><div class="ticket-buttons"><button id="copyBtn" class="btn btn-soft" type="button" disabled>▤ Kopyala</button><button id="downloadBtn" class="btn btn-dark" type="button" disabled>↓ QR PNG</button></div></div></div>
+       <div class="inline-info"><span>✓</span> Bilet Firestore-da saxlandıqdan sonra QR aktiv olur.</div>
+      </article>
+    </div>
+   </section>
+   <section class="view hidden" id="view-tickets">
+     <div class="page-title"><div><span class="field-kicker">TICKET REGISTRY</span><h1>Bilet reyestri</h1><p>Yaradılmış biletləri axtar, status üzrə filtr et və Excel yüklə.</p></div><button id="exportTicketsBtn" class="btn btn-primary" disabled type="button">↓ Excel (.xlsx) yüklə</button></div>
+     <div class="panel registry-panel"><div class="toolbar"><div class="search-wrap"><span>⌕</span><input id="ticketSearch" type="search" placeholder="Bilet nömrəsi ilə axtar..." autocomplete="off" aria-label="Bilet axtarışı"></div><select id="ticketStatusFilter" class="select-control" aria-label="Status filtri"><option value="all">Bütün statuslar</option><option value="active">Yalnız aktiv</option><option value="used">Daxil olanlar</option></select><span id="registryFilterCount" class="filter-count">0 nəticə</span></div>
+     <div class="registry-controls"><label class="qr-checkbox"><input id="includeQrPayload" type="checkbox"> QR məlumatını Excel-ə əlavə et (məxfi)</label><button id="clearSelectionBtn" class="text-btn" type="button">Seçimi sıfırla</button><span id="selectionNote" class="muted-caption">Seçim yoxdursa bütün filtr nəticələri ixrac olunur</span></div>
+      <div class="table-scroll"><table class="data-table"><thead><tr><th class="check-cell"><input id="selectAllTickets" type="checkbox" aria-label="Bu səhifənin hamısını seç"></th><th>Bilet nömrəsi</th><th>Status</th><th>Yaradılma vaxtı</th><th>Giriş vaxtı</th><th>Əməliyyatlar</th></tr></thead><tbody id="ticketRows"><tr><td colspan="6" class="table-empty">Biletlər yüklənir...</td></tr></tbody></table></div>
+     <div class="table-footer"><span id="tableSummary">0 bilet</span><div class="pagination"><button class="btn btn-soft" id="prevPageBtn" type="button" disabled>‹</button><span id="pageInfo">1 / 1</span><button class="btn btn-soft" id="nextPageBtn" type="button" disabled>›</button></div></div></div>
+   </section>
+   <section class="view hidden" id="view-scanner"><div class="page-title"><div><span class="field-kicker">LIVE ADMISSIONS</span><h1>QR yoxlama</h1><p>Bir bilet yalnız bir dəfə təsdiqlənir. Server cavabı olmadan giriş verilmir.</p></div><span id="cameraState" class="status-indicator">KAMERA BAĞLIDIR</span></div>
+     <div class="scanner-layout"><article class="panel scanner-panel"><div class="panel-head"><div><span class="field-kicker">03 / SCAN CONTROL</span><h2>Canlı kamera</h2><p>QR kodu ekrandakı çərçivəyə yerləşdirin.</p></div><span class="panel-icon">▦</span></div>
+     <div id="scannerShell" class="scanner-shell"><div id="scannerViewport"></div><div id="scannerPlaceholder" class="scanner-placeholder"><span class="scanner-glyph">▦</span><b>Kamera hazırdır</b><small>Başlamaq üçün aşağıdakı düyməyə basın</small></div><div class="scanner-overlay"><i class="scan-corner tl"></i><i class="scan-corner tr"></i><i class="scan-corner bl"></i><i class="scan-corner br"></i><span>QR KODU BURADA SAXLAYIN</span></div></div>
+     <div id="scanFeedback" class="scan-feedback hidden" role="status" aria-live="polite"></div>
+     <div class="scanner-actions"><button id="startScanBtn" class="btn btn-primary" type="button">◉ Kameranı aç</button><button id="nextScanBtn" class="btn btn-primary hidden" type="button">Növbəti bilet ↗</button><button id="stopScanBtn" class="btn btn-soft hidden" type="button">Kameranı bağla</button><button id="torchBtn" class="btn btn-soft hidden" type="button">Fənər</button></div><p class="muted-caption scanner-legal">HTTPS və server bağlantısı lazımdır. Sınağı yalnız icazəli test biletlərində edin.</p></article>
+     <article class="panel scanner-aside"><div class="panel-head"><div><span class="field-kicker">SECURE WORKFLOW</span><h2>Yoxlama prinsipi</h2></div></div><div class="checkline"><span>1</span><div><strong>QR oxunur</strong><p>Kod və məxfi token Firestore sənədi ilə yoxlanır.</p></div></div><div class="checkline"><span>2</span><div><strong>Birdəfəlik təsdiq</strong><p>İki cihaz eyni anda oxutsa belə yalnız bir giriş qəbul edilir.</p></div></div><div class="checkline"><span>3</span><div><strong>Canlı daxilolma</strong><p>Uğurlu oxuma server tərəfindən təsdiqlənir və siyahıya yazılır.</p></div></div></article></div>
+   </section>
+   <section class="view hidden" id="view-admissions"><div class="page-title"><div><span class="field-kicker">ENTRY ACTIVITY</span><h1>Daxilolmalar</h1><p>QR yoxlamasından keçmiş biletlər və giriş vaxtları.</p></div><button id="exportAdmissionsBtn" class="btn btn-primary" type="button" disabled>↓ Excel (.xlsx) yüklə</button></div>
+     <div class="panel registry-panel"><div class="toolbar"><div class="search-wrap"><span>⌕</span><input id="admissionsSearch" type="search" placeholder="Giriş kodunu axtar..." autocomplete="off" aria-label="Daxilolma axtarışı"></div><span id="admissionsCount" class="filter-count">0 daxilolma</span></div><div class="table-scroll"><table class="data-table admission-table"><thead><tr><th>Bilet nömrəsi</th><th>Giriş vaxtı</th><th>Status</th></tr></thead><tbody id="admissionRows"><tr><td colspan="3" class="table-empty">Daxilolmalar yüklənir...</td></tr></tbody></table></div><div class="table-footer"><span id="admissionsPageSummary">0 bilet</span><div class="pagination"><button class="btn btn-soft" id="prevAdmissionBtn" disabled type="button">‹</button><span id="admissionPageInfo">1 / 1</span><button class="btn btn-soft" id="nextAdmissionBtn" disabled type="button">›</button></div></div></div>
+   </section>
+  <footer>© TicketFlow · QR Studio <span>PRINT TICKETS / SECURE ACCESS</span></footer>
+  </main>
+ </div>
+</div>
+<dialog id="deleteDialog" class="modal"><h2>Bileti silmək istəyirsiniz?</h2><p>Bu bilet və ona bağlı giriş qeydi silinəcək. Əməliyyat geri qaytarılmır.</p><strong id="deleteCode" class="delete-code"></strong><label id="usedDeleteWarning" class="qr-checkbox hidden"><input id="confirmUsedDelete" type="checkbox"> Oxunmuş biletin daxilolmasının da silinəcəyini təsdiq edirəm.</label><div class="modal-actions"><button id="cancelDeleteBtn" class="btn btn-soft" type="button">Ləğv et</button><button id="confirmDeleteBtn" class="btn btn-danger" type="button">Bəli, sil</button></div><p id="deleteError" role="alert" class="error-msg"></p></dialog>
+<div id="toast" class="toast hidden" role="status" aria-live="polite"></div>
+<script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html5-qrcode/2.3.8/html5-qrcode.min.js"></script>
+<script type="module" src="./app.js?v=10.1"></script>
+</body></html>
