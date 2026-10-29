@@ -477,3 +477,29 @@
   .recent-delete{font-size:9px;padding:5px 7px;}
   .delete-dialog{padding:22px 18px;}
 }
+
+/* ===== v8 Premium & Secure — event context, live status, safe camera ===== */
+.connection-status[data-state="down"]{color:#c44460!important}.connection-status[data-state="down"] .pulse-dot{background:#d9506b;box-shadow:0 0 0 4px #d9506b22}
+.connection-status[data-state="checking"]{color:#a37c31!important}.connection-status[data-state="checking"] .pulse-dot{background:#daa347;box-shadow:0 0 0 4px #daa34722}
+.event-strip{display:flex;align-items:center;justify-content:space-between;gap:22px;margin-bottom:8px;padding:17px 23px;border-color:#dce7f6;background:linear-gradient(105deg,#fff,#f7faff)}
+.event-strip-info{display:grid;gap:3px;min-width:0}.event-strip-info strong{font-size:14px;letter-spacing:-.3px}.event-strip-info small{color:#8193a9;font-size:10px}.event-strip-actions{display:flex;gap:9px;align-items:center;flex:0 1 auto;min-width:0}
+.event-select{height:40px;border:1px solid #d9e5f5;border-radius:10px;color:#2c4665;padding:0 10px;background:white;min-width:170px;max-width:330px;width:30vw;font:700 11px/1.4 var(--font);text-overflow:ellipsis}
+.event-notice{margin:0 2px 21px;color:#758ca7;font-size:10px;line-height:1.6}
+.visually-hidden{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
+.list-more{width:100%;min-height:34px;margin-top:9px;font-size:10px}
+.event-dialog form{display:grid;gap:12px;margin-top:18px}.event-dialog form label{font-size:11px;font-weight:800;color:#57708b}.event-dialog form input{width:100%;padding:12px 13px;min-height:44px;border:1px solid #dfe8f4;border-radius:10px;outline:0}.event-dialog form input:focus{border-color:#5490f2;box-shadow:0 0 0 3px #edf4ff}
+.delete-used-confirm{display:flex;gap:11px;align-items:flex-start;padding:12px;border:1px solid #eabcca;border-radius:11px;background:#fff5f7;margin-top:12px;font-size:10px;color:#a93655;font-weight:700;line-height:1.6}.delete-used-confirm input{margin-top:3px;accent-color:#c84060;flex:0 0 auto}
+/* The library provides the actual scan region and border. Do not draw a second fake QR box. */
+.scanner-overlay .scanner-reticle{display:none!important}
+.scanner-viewport.is-active{height:auto!important;max-height:none!important;aspect-ratio:auto!important;min-height:180px;overflow:hidden;background:#101d2c}
+.scanner-viewport.is-active #scannerViewport{display:block;width:min(100%,480px);max-width:100%;line-height:0}
+#app .scanner-viewport #scannerViewport video{width:100%!important;height:auto!important;object-fit:contain!important;display:block!important;max-height:none!important}
+#app .scanner-viewport #scannerViewport #qr-shaded-region{box-sizing:border-box}
+@media(max-width:720px){
+ .event-strip{padding:13px 14px;display:grid;gap:12px;border-radius:13px}.event-strip-actions{width:100%}.event-select{flex:1;width:auto;min-width:0;max-width:none}.event-strip-actions .button{min-height:39px;padding:8px 11px;font-size:10px}
+ .event-notice{margin-bottom:16px}.scanner-viewport.is-active{min-height:160px}
+}
+@media(max-width:355px){.event-strip-actions .button{font-size:9px;padding:8px}.event-select{font-size:10px}}
+
+.admissions-title-actions{display:flex;align-items:center;justify-content:flex-end;gap:8px;margin-left:auto}.admissions-title-actions .button{font-size:9px;min-height:31px;padding:6px 9px}.event-select:disabled{opacity:.6;cursor:wait}
+@media(max-width:380px){.admissions-title-actions{flex-direction:column;align-items:flex-end;gap:3px}.admissions-title-actions .button{font-size:8px;padding:5px 7px}}
