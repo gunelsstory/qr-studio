@@ -5,7 +5,7 @@ import {
 } from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js';
 import {
   getFirestore, doc, getDoc, getDocFromServer, collection, query, orderBy,
-  onSnapshot, serverTimestamp, runTransaction
+  onSnapshot, serverTimestamp, runTransaction, getDocsFromServer
 } from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js';
 import { firebaseConfig } from './firebase-config.js';
 
@@ -47,7 +47,9 @@ let sessionUid = null;
 let onlineConfirmedAt = 0;
 let heartbeatTimer = null;
 let connectionBusy = false;
-let showTicketLimit = 35;
+const TICKETS_PER_PAGE = 12;
+let registryPage = 1;
+const selectedTicketCodes = new Set();
 let torchOn = false;
 let pendingDeleteCode = null;
 let deletingTicket = false;
@@ -121,8 +123,9 @@ function setEvent(nextId) {
   if (eventId === nextId) return;
   if (scannerActive || scanner) stopScanner();
   eventId = nextId;
-  showTicketLimit = 35;
+  registryPage = 1; selectedTicketCodes.clear();
   $('ticketSearch').value = '';
+  $('ticketStatusFilter').value = 'all';
   clearGeneratedTicket();
   updateEventNotice(); recalcEventView();
 }
@@ -310,57 +313,99 @@ function downloadQr() {
   }, 'image/png');
 }
 
+function filteredRegistryTickets(records = recentTickets) {
+  const term = $('ticketSearch').value.trim().toUpperCase();
+  const filter = $('ticketStatusFilter').value;
+  return records.filter(({id, data}) => {
+    const code = String(data.code || id);
+    if (term && !code.toUpperCase().includes(term)) return false;
+    if (filter === 'active' && data.used === true) return false;
+    if (filter === 'used' && data.used !== true) return false;
+    return true;
+  });
+}
+function registryDate(timestamp) {
+  return timestamp?.toDate ? formatDate(timestamp) : '—';
+}
 function renderTicketList() {
   const list = $('recentList');
-  const term = $('ticketSearch').value.trim().toUpperCase();
-  const filtered = recentTickets.filter(item => String(item.data.code || item.id).toUpperCase().includes(term));
-  const visible = filtered.slice(0, showTicketLimit);
-  $('moreTicketsBtn').classList.toggle('hidden', filtered.length <= showTicketLimit);
-  $('recentCount').textContent = term ? `${filtered.length} / ${recentTickets.length}` : `CƏM ${recentTickets.length}`;
+  const filtered = filteredRegistryTickets();
+  const pageCount = Math.max(1, Math.ceil(filtered.length / TICKETS_PER_PAGE));
+  registryPage = Math.min(Math.max(1, registryPage), pageCount);
+  const visible = filtered.slice((registryPage - 1) * TICKETS_PER_PAGE, registryPage * TICKETS_PER_PAGE);
+  const allIds = new Set(recentTickets.map(t => t.id));
+  for (const code of selectedTicketCodes) if (!allIds.has(code)) selectedTicketCodes.delete(code);
+  $('recentCount').textContent = recentTickets.length.toLocaleString('az-AZ');
+  $('registryFilterCount').textContent = `${filtered.length.toLocaleString('az-AZ')} nəticə`;
+  $('registryPageInfo').textContent = `${registryPage} / ${pageCount}`;
+  $('prevTicketsBtn').disabled = registryPage === 1;
+  $('nextTicketsBtn').disabled = registryPage >= pageCount;
+  $('clearTicketSelection').classList.toggle('hidden', selectedTicketCodes.size === 0);
+  $('registrySelectionStatus').textContent = selectedTicketCodes.size
+    ? `${selectedTicketCodes.size} bilet seçilib · Excel yalnız seçilənləri yükləyəcək`
+    : 'Excel üçün sətirləri seçin və ya filtrin bütün nəticələrini yükləyin';
+  const selectAll = $('selectAllTickets');
+  selectAll.checked = visible.length > 0 && visible.every(t => selectedTicketCodes.has(t.id));
+  selectAll.indeterminate = visible.some(t => selectedTicketCodes.has(t.id)) && !selectAll.checked;
+  selectAll.disabled = !visible.length;
+  $('exportTicketsBtn').disabled = !ticketsReady || !filtered.length && !selectedTicketCodes.size;
   list.replaceChildren();
   if (!filtered.length) {
-    const p = document.createElement('p');
-    p.className = 'empty-list';
-    p.textContent = term ? 'Bu nömrə ilə bilet tapılmadı.' : 'Hələ bilet yoxdur.';
-    list.append(p);
-    return;
+    const row = document.createElement('tr');
+    const cell = document.createElement('td');
+    cell.colSpan = 6;
+    cell.className = 'registry-empty';
+    cell.textContent = recentTickets.length ? 'Axtarış və filtrə uyğun bilet tapılmadı.' : 'Bu tədbirdə hələ bilet yaradılmayıb.';
+    row.append(cell); list.append(row);return;
   }
   const fragment = document.createDocumentFragment();
   for (const item of visible) {
     const data = item.data;
-    const row = document.createElement('div');
-    row.className = 'recent-item';
-
-    const openButton = document.createElement('button');
-    openButton.type = 'button';
-    openButton.className = 'recent-open';
-    openButton.setAttribute('aria-label', `${data.code} biletinin QR kodunu göstər`);
-    const code = document.createElement('span');
-    code.className = 'recent-code';
-    code.textContent = data.code;
-    const status = document.createElement('span');
-    status.className = 'recent-status';
-    status.textContent = data.used ? 'İstifadə olunub' : 'QR-ni göstər ↗';
-    openButton.append(code, status);
-    openButton.addEventListener('click', async () => {
-      try {
-        const updated = await getDoc(doc(db, TICKET_COLLECTION, item.id));
-        if (updated.exists()) displayTicket(updated.data());
-        else toast('Bilet artıq bazada yoxdur.');
-      } catch (error) { toast(friendlyError(error)); }
+    const row = document.createElement('tr');
+    row.className = selectedTicketCodes.has(item.id) ? 'registry-row is-selected' : 'registry-row';
+    const selectCell = document.createElement('td');
+    selectCell.className = 'registry-checkbox-col';
+    const box = document.createElement('input');
+    box.type = 'checkbox'; box.checked = selectedTicketCodes.has(item.id);
+    box.setAttribute('aria-label', `${data.code || item.id} biletini Excel üçün seç`);
+    box.addEventListener('change', () => {
+      if (box.checked) selectedTicketCodes.add(item.id); else selectedTicketCodes.delete(item.id);
+      renderTicketList();
     });
-
-    const deleteButton = document.createElement('button');
-    deleteButton.type = 'button';
-    deleteButton.className = 'recent-delete';
-    deleteButton.setAttribute('aria-label', `${data.code} nömrəli bileti sil`);
-    deleteButton.innerHTML = '<svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M4 7h16M10 7V4h4v3M6.5 7l1 13h9l1-13M10 11v5M14 11v5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg><span>Sil</span>';
-    deleteButton.addEventListener('click', () => openDeleteDialog(item.id));
-    row.append(openButton, deleteButton);
-    fragment.append(row);
+    selectCell.append(box);
+    const codeCell = document.createElement('td');
+    codeCell.dataset.label = 'Bilet nömrəsi';
+    const code = document.createElement('strong');code.className = 'registry-code';code.textContent = data.code || item.id;
+    codeCell.append(code);
+    const statusCell = document.createElement('td');
+    statusCell.dataset.label = 'Status';
+    const status = document.createElement('span');
+    status.className = `registry-status ${data.used ? 'is-used' : 'is-available'}`;
+    status.textContent = data.used ? 'Daxil olub' : 'Aktiv';statusCell.append(status);
+    const createdCell = document.createElement('td');createdCell.dataset.label='Yaradılıb';
+    createdCell.className = 'registry-time';createdCell.textContent = registryDate(data.createdAt);
+    const usedCell = document.createElement('td');usedCell.dataset.label='Giriş vaxtı';
+    usedCell.className = 'registry-time';usedCell.textContent = registryDate(data.usedAt);
+    const actionsCell = document.createElement('td');
+    actionsCell.className = 'registry-action-col';actionsCell.dataset.label = 'Əməliyyatlar';
+    const actionWrap = document.createElement('div');actionWrap.className='registry-actions';
+    const viewButton = document.createElement('button'); viewButton.className='registry-view'; viewButton.type='button';
+    viewButton.textContent='QR göstər'; viewButton.setAttribute('aria-label',`${data.code} biletinin QR-ni göstər`);
+    viewButton.addEventListener('click', async () => {
+      try { await requireConnection(); const updated=await getDocFromServer(doc(db,TICKET_COLLECTION,item.id));
+        if(updated.exists()) {displayTicket(updated.data());document.querySelector('.ticket-panel')?.scrollIntoView({behavior:'smooth',block:'center'});}
+        else toast('Bilet artıq bazada yoxdur.');
+      } catch(error) {toast(friendlyError(error));}
+    });
+    const deleteButton = document.createElement('button');deleteButton.className='registry-delete';deleteButton.type='button';
+    deleteButton.textContent='Sil';deleteButton.setAttribute('aria-label',`${data.code} nömrəli bileti sil`);
+    deleteButton.addEventListener('click',()=>openDeleteDialog(item.id));
+    actionWrap.append(viewButton,deleteButton);actionsCell.append(actionWrap);
+    row.append(selectCell,codeCell,statusCell,createdCell,usedCell,actionsCell);fragment.append(row);
   }
   list.append(fragment);
 }
+
 function openDeleteDialog(code) {
   if (deletingTicket) return;
   pendingDeleteCode = code;
@@ -600,6 +645,7 @@ function cleanupSubscriptions() {
   clearInterval(heartbeatTimer); heartbeatTimer = null; sessionUid=null;
   eventId=LEGACY_EVENT; allTickets=[];allCheckins=[]; ticketsReady=false;admissionsReady=false;
   $('eventSelect').replaceChildren(new Option('Əvvəlki biletlər (TF1)',LEGACY_EVENT));
+  selectedTicketCodes.clear();registryPage = 1;
   totalTickets = null; checkedInTickets = null; recentTickets = [];
   setConnection('checking'); updateEventNotice();
   updateStats();
@@ -665,7 +711,16 @@ $('loginForm').addEventListener('submit', async event => {
 });
 $('logoutBtn').addEventListener('click', async () => { await stopScanner(); await signOut(auth); });
 $('generateBtn').addEventListener('click', createNewTicket);
-$('ticketSearch').addEventListener('input', renderTicketList);
+$('ticketSearch').addEventListener('input', () => { registryPage = 1; renderTicketList(); });
+$('ticketStatusFilter').addEventListener('change', () => { registryPage = 1; renderTicketList(); });
+$('clearTicketSelection').addEventListener('click', () => { selectedTicketCodes.clear();renderTicketList(); });
+$('prevTicketsBtn').addEventListener('click', () => { registryPage -= 1; renderTicketList(); });
+$('nextTicketsBtn').addEventListener('click', () => { registryPage += 1; renderTicketList(); });
+$('selectAllTickets').addEventListener('change', event => {
+  const page = filteredRegistryTickets().slice((registryPage-1)*TICKETS_PER_PAGE,registryPage*TICKETS_PER_PAGE);
+  for (const item of page) if(event.target.checked) selectedTicketCodes.add(item.id); else selectedTicketCodes.delete(item.id);
+  renderTicketList();
+});
 $('cancelDeleteBtn').addEventListener('click', () => $('deleteDialog').close());
 $('confirmDeleteBtn').addEventListener('click', deleteTicket);
 $('deleteDialog').addEventListener('cancel', event => { if (deletingTicket) event.preventDefault(); });
@@ -681,7 +736,7 @@ $('eventSelect').addEventListener('change', e => setEvent(e.target.value));
 $('addEventBtn').addEventListener('click', () => { $('eventError').textContent=''; $('eventDialog').showModal(); });
 $('cancelEventBtn').addEventListener('click', () => $('eventDialog').close());
 $('eventForm').addEventListener('submit', createEvent);
-$('moreTicketsBtn').addEventListener('click', () => { showTicketLimit += 35;renderTicketList(); });
+
 $('confirmUsedDelete').addEventListener('change', e => { $('confirmDeleteBtn').disabled=!e.target.checked; });
 $('torchBtn').addEventListener('click', async () => {
   if (!scanner || !scannerActive) return;
@@ -692,6 +747,136 @@ $('torchBtn').addEventListener('click', async () => {
 window.addEventListener('offline', () => setConnection('down'));
 window.addEventListener('online', () => { if(sessionUid) requireConnection().catch(()=>{}); });
 updateEventNotice();
+
+// ExcelJS yalnız ixrac düyməsi basıldıqda yüklənir; ilkin səhifə ağırlaşmır.
+let excelJsLoader = null;
+async function loadExcelJs() {
+  if (window.ExcelJS) return window.ExcelJS;
+  if (excelJsLoader) return excelJsLoader;
+  excelJsLoader = (async () => {
+    const urls = [
+      'https://cdn.jsdelivr.net/npm/exceljs@4.4.0/dist/exceljs.min.js',
+      'https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.4.0/exceljs.min.js'
+    ];
+    for (const src of urls) {
+      try {
+        await new Promise((resolve,reject) => {
+          const script = document.createElement('script'); script.src=src;script.async=true;
+          const timeout=setTimeout(()=>{script.remove();reject(new Error('EXCEL_TIMEOUT'));},20000);
+          script.onload=()=>{clearTimeout(timeout);resolve();};
+          script.onerror=()=>{clearTimeout(timeout);script.remove();reject(new Error('EXCEL_SCRIPT_ERROR'));};
+          document.head.append(script);
+        });
+        if(window.ExcelJS) return window.ExcelJS;
+      } catch(err) { console.warn('ExcelJS CDN:',err.message); }
+    }
+    throw new Error('Excel kitabxanası yüklənmədi. İnternet bağlantısını yoxlayın.');
+  })();
+  try { return await excelJsLoader; } catch(error){excelJsLoader=null;throw error;}
+}
+function safeExcelText(value) {
+  const s=String(value ?? '');
+  // Excel formula injection müdafiəsi; hüceyrə mütləq sadə mətn olmalıdır.
+  return /^[\s\t\r\n]*[=+@\-]/.test(s) ? "'" + s : s;
+}
+function excelDate(timestamp) {
+  if(!timestamp?.toDate) return null;
+  const local = timestamp.toDate();
+  // ExcelJS uses UTC serials. Preserve the local calendar date/hour shown in the UI.
+  return new Date(Date.UTC(local.getFullYear(),local.getMonth(),local.getDate(),local.getHours(),local.getMinutes(),local.getSeconds()));
+}
+async function downloadTicketsExcel() {
+  const button=$('exportTicketsBtn');
+  if(button.disabled) return;
+  const originally=button.innerHTML;
+  button.disabled=true;
+  const exportEventId=eventId;
+  $('eventSelect').disabled=true;
+  button.textContent='Excel hazırlanır...';
+  try {
+    await requireConnection();
+    // Serverdən təzə snapshot; cached siyahını yekun Excel kimi qəbul etmirik.
+    const snapshot=await getDocsFromServer(query(collection(db,TICKET_COLLECTION),orderBy('createdAt','desc')));
+    if(eventId!==exportEventId) throw new Error('Tədbir dəyişdi, ixracı yenidən başladın.');
+    const eventTickets=snapshot.docs.map(d=>({id:d.id,data:d.data()})).filter(item=>ticketBelongs(item.data));
+    const chosen=selectedTicketCodes.size
+      ? eventTickets.filter(item=>selectedTicketCodes.has(item.id))
+      : filteredRegistryTickets(eventTickets);
+    if(!chosen.length) throw new Error('İxrac üçün bilet tapılmadı. Filtri və seçimi yoxlayın.');
+    const ExcelJS=await loadExcelJs();
+    const wb=new ExcelJS.Workbook();
+    wb.creator='TicketFlow QR Studio';wb.lastModifiedBy='TicketFlow';wb.created=new Date();
+    const sheet=wb.addWorksheet('Yaradılan biletlər',{views:[{state:'frozen',ySplit:6}],properties:{defaultRowHeight:22}});
+    const withQr=$('includeQrPayload').checked;
+    const columns=[
+      {header:'№',key:'index',width:8},
+      {header:'Bilet nömrəsi',key:'code',width:25},
+      {header:'Status',key:'status',width:19},
+      {header:'Tədbir',key:'event',width:30},
+      {header:'Yaradılma vaxtı',key:'created',width:22},
+      {header:'Daxilolma vaxtı',key:'used',width:22},
+      {header:'Yaradan admin UID',key:'createdBy',width:32}
+    ];
+    if(withQr)columns.push({header:'QR məlumatı (MƏXFİ)',key:'qrPayload',width:70});
+    sheet.columns=columns;
+    const lastCol=String.fromCharCode(64+columns.length);
+    sheet.mergeCells(`A1:${lastCol}2`);
+    const heading=sheet.getCell('A1');heading.value='TICKETFLOW / BİLET REYESTRİ';
+    heading.fill={type:'pattern',pattern:'solid',fgColor:{argb:'FF17263C'}};
+    heading.font={name:'Aptos Display',bold:true,color:{argb:'FFFFFFFF'},size:17};
+    heading.alignment={vertical:'middle',indent:1};
+    sheet.getRow(1).height=23;sheet.getRow(2).height=23;
+    sheet.mergeCells(`A3:${lastCol}3`);
+    sheet.getCell('A3').value=`Tədbir: ${safeExcelText(eventId === LEGACY_EVENT ? 'Əvvəlki biletlər (TF1)' : (eventRecords.find(e=>e.id===eventId)?.name||eventId))}    •    İxrac: ${new Intl.DateTimeFormat('az-AZ',{dateStyle:'medium',timeStyle:'short'}).format(new Date())}`;
+    sheet.getCell('A3').font={color:{argb:'FF5F7491'},size:10};
+    sheet.getRow(3).height=26;
+    sheet.mergeCells(`A4:${lastCol}4`);
+    sheet.getCell('A4').value=withQr ? 'MƏXFİ: QR məlumatı olan bu Excel faylını ictimai paylaşmayın.' : 'Bilet nömrələri və statuslar · QR açarı ixrac olunmayıb.';
+    sheet.getCell('A4').font={color:{argb:withQr?'FFC04E58':'FF6A7A90'},italic:true,size:10};
+    sheet.getRow(4).height=25;
+    const hdr=sheet.getRow(6);
+    columns.forEach((column,idx)=> {const cell=hdr.getCell(idx+1);cell.value=column.header;cell.fill={type:'pattern',pattern:'solid',fgColor:{argb:'FFECF3FB'}};cell.font={name:'Aptos',bold:true,color:{argb:'FF28466E'},size:10};cell.alignment={vertical:'middle',indent:1};cell.border={bottom:{style:'medium',color:{argb:'FF9CB5D7'}}};});
+    hdr.height=31;
+    const evName=eventId === LEGACY_EVENT ? 'Əvvəlki biletlər (TF1)' : eventRecords.find(e=>e.id===eventId)?.name || eventId;
+    chosen.forEach((item,i)=> {
+      const d=item.data;
+      const row=sheet.addRow({index:i+1,code:safeExcelText(d.code||item.id),status:d.used?'Daxil olub':'Aktiv',event:safeExcelText(evName),created:excelDate(d.createdAt),used:excelDate(d.usedAt),createdBy:safeExcelText(d.createdBy||''), ...(withQr?{qrPayload:safeExcelText(d.qrPayload||'')}: {}) });
+      row.height=25;
+      row.eachCell({includeEmpty:true},(cell,j)=> {
+        cell.font={name:'Aptos',size:10,color:{argb:'FF334762'}};
+        cell.alignment={vertical:'middle',indent:1};
+        if(i%2===1)cell.fill={type:'pattern',pattern:'solid',fgColor:{argb:'FFF6F9FE'}};
+        cell.border={bottom:{style:'hair',color:{argb:'FFE6EDF5'}}};
+        if(j===3){cell.font={name:'Aptos',size:10,bold:true,color:{argb:d.used?'FF0A8069':'FF2669C8'}};}
+        if(j===5 || j===6){cell.numFmt='dd.mm.yyyy hh:mm';}
+      });
+    });
+    sheet.autoFilter={from:{row:6,column:1},to:{row:6+chosen.length,column:columns.length}};
+    sheet.pageSetup={orientation:'landscape',fitToPage:true,fitToWidth:1,fitToHeight:0,printTitlesRow:'1:6'};
+    const summary=wb.addWorksheet('Xülasə');
+    summary.columns=[{width:31},{width:24}];
+    summary.mergeCells('A1:B2');summary.getCell('A1').value='TICKETFLOW / XÜLASƏ';
+    summary.getCell('A1').fill={type:'pattern',pattern:'solid',fgColor:{argb:'FF17263C'}};
+    summary.getCell('A1').font={bold:true,color:{argb:'FFFFFFFF'},size:16};
+    summary.addRow([]);summary.addRow(['Tədbir',safeExcelText(evName)]);
+    summary.addRow(['İxrac olunan biletlər',chosen.length]);
+    summary.addRow(['Aktiv',chosen.filter(t=>!t.data.used).length]);
+    summary.addRow(['Daxil olub',chosen.filter(t=>t.data.used).length]);
+    summary.addRow(['QR məlumatı',withQr?'Daxildir (MƏXFİ)':'Daxil deyil']);
+    for(const num of [4,5,6,7,8]){
+      const row=summary.getRow(num);row.height=28;
+      row.getCell(1).font={bold:true,color:{argb:'FF50637B'}};
+    }
+    const bytes=await wb.xlsx.writeBuffer();
+    const blob=new Blob([bytes],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
+    const url=URL.createObjectURL(blob);
+    const a=document.createElement('a');a.href=url;a.download=`TicketFlow-${eventId}-Bilet-Reyestri.xlsx`;document.body.append(a);a.click();a.remove();
+    setTimeout(()=>URL.revokeObjectURL(url),3000);
+    toast(`${chosen.length} bilet Excel formatında yükləndi.`);
+  }catch(error){console.error(error);toast('Excel yüklənmədi: '+friendlyError(error));}
+  finally{button.innerHTML=originally;$('eventSelect').disabled=false;renderTicketList();}
+}
+$('exportTicketsBtn').addEventListener('click',downloadTicketsExcel);
 
 function downloadAdmissionsCsv() {
   const records = allCheckins.filter(item => admissionBelongs(item.data));
