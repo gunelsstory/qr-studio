@@ -477,3 +477,13 @@
   .recent-delete{font-size:9px;padding:5px 7px;}
   .delete-dialog{padding:22px 18px;}
 }
+
+
+/* ==== v8 • Excel export actions (keeps original layout and mobile behavior) ==== */
+.export-actions{display:flex;align-items:center;justify-content:flex-end;gap:11px;min-width:0;}
+.button-excel{padding:7px 11px;min-height:32px;font-size:10px;gap:6px;color:#168767;background:#edfaf5;border-color:#c9ecdd;box-shadow:none;border-radius:9px;}
+.button-excel:hover:not(:disabled){background:#daf5e8;border-color:#a5dbc4;color:#0d7156;}
+.button-excel svg{width:14px;height:14px;}
+.admissions-footer{justify-content:space-between;flex-wrap:wrap;gap:10px;}
+.admissions-sync{display:inline-flex;align-items:center;gap:9px;min-width:0;}
+@media(max-width:400px){.export-actions{gap:6px;}.button-excel{font-size:9px;padding:6px 8px;min-height:30px;}.recent-head strong{font-size:9px;}.admissions-footer .button-excel{margin-left:auto;}}
