@@ -1,0 +1,48 @@
+TicketFlow QR Studio — Glass Dashboard (Mooney-stil)
+============================================
+
+YENİ DİZAYN
+- Sol tərəfdə açıq-lavanda menyu.
+- Mərkəzdə bənövşəyi canlı bilet göstəricisi.
+- Firestore-dakı cari QR giriş sayına əsaslanan bölgü kartı.
+- Sağda admin görünüşü, sürətli keçidlər və mövcud bilet siyahısının kiçik xülasəsi.
+- Masaüstü, planşet və mobil ekranlara adaptiv interfeys.
+
+EYNİ SAXLANILAN KODLAR
+- app.js (QR generator, giriş yoxlanışı, Sold, silmə, Excel, Firestore əməliyyatları)
+- firebase-config.js
+- firestore-rules-snippet.txt
+- dashboard-ui.js (mobil naviqasiya)
+
+ƏLAVƏ OLUNAN FAYLLAR
+- reference-glass.css : görüntü üslubu
+- reference-ui.js    : artıq saytda görünən statistikaları sağ panelə əks etdirir;
+                       Firestore-a əlavə sorğu və ya yazma etmir.
+- index.html         : eyni funksional elementlərin və yeni blokların düzülüşü.
+
+GITHUB PAGES ÜÇÜN
+1. Mövcud işlək repodakı faylların surətini ehtiyat nüsxə kimi saxlayın.
+2. Bu ZIP faylını çıxarın və içindəki faylları GitHub reposunun index.html
+   yerləşən qovluğuna əlavə edin (qovluğun özünü ayrıca alt qovluq kimi
+   yerləşdirməyin).
+3. Eyni adlı faylları yeniləyin. reference-glass.css və reference-ui.js
+   fayllarını da mütləq əlavə edin.
+4. Commit changes edin və GitHub Pages yayımlanandan sonra səhifəni
+   Ctrl+Shift+R ilə yeniləyin.
+5. Firestore Rules-a və Firebase kolleksiyalarına dəyişiklik lazım deyil.
+
+CANLI SINAQ PLANI
+1. Admin hesabı ilə daxil olun.
+2. Yeni bilet yaradın; Firestore printTickets-də göründüyünü yoxlayın.
+3. Yeni biletdə Hazır -> Sold basın; sold=true və soldAt sahələrini yoxlayın.
+4. Səhifəni və ya cihazı dəyişərək Sold statusunun qaldığını yoxlayın.
+5. QR kodu PNG kimi yükləyin, digər cihazın kamerasından skan edin.
+6. Eyni kodun ikinci girişə icazə verməməsini yoxlayın.
+7. Bilet silinməsini və uyğun check-in qeydinin silinməsini yoxlayın.
+8. Excel ixracını, axtarışı və mobil menyunu yoxlayın.
+
+SINAQ QEYDİ
+Statik interfeys sınaqları 320, 390, 430, 650, 820, 1170, 1300 və 1536px enində aparılıb.
+Canlı Firebase hesabı ilə real bilet yaratma/QR oxutma sınağı aparılmayıb.
+Dizayn önizləmə şəkillərindəki 248/74/174 göstəriciləri yalnız test nümunəsidir;
+real saytda göstəricilər mövcud Firestore məlumatlarından gələcək.

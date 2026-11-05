@@ -1,0 +1,73 @@
+// ================================================================
+// TICKETFLOW QR STUDIO — FIRESTORE RULES: SOLD + QR + SILMƏ
+// ================================================================
+// Diqqət: Bu, Firestore qaydalarının TAM faylı deyil.
+// Firebase Console -> Firestore Database -> Rules ekranında
+// mövcud iki match blokunu (printTickets və printCheckins) BUNLARLA
+// ƏVƏZ EDİN. Digər kolleksiyalara və mövcud isAdmin() funksiyasına
+// toxunmayın. Bu bloklar match /databases/{database}/documents
+// çərçivəsinin İÇƏRİSİNDƏ yerləşməlidir.
+//
+// isAdmin() əvvəlki qaydalarda təyin edilmiş olmalıdır.
+// Bu versiyada sold/soldAt yalnız admin tərəfindən 1 dəfə yazılır.
+// Köhnə biletlərdə bu sahələr olmadıqda da Hazır -> Sold işləyir.
+
+match /printTickets/{ticketNo} {
+  allow read: if isAdmin();
+
+  // Əvvəlki bilet yaratma formatı dəyişməyib.
+  allow create: if isAdmin()
+    && request.resource.data.keys().hasAll(['code', 'qrToken', 'qrPayload', 'used', 'usedAt', 'createdAt'])
+    && request.resource.data.keys().hasOnly(['code', 'qrToken', 'qrPayload', 'used', 'usedAt', 'createdAt'])
+    && request.resource.data.code == ticketNo
+    && ticketNo.matches('^TF-[A-Z2-9]{4}-[A-Z2-9]{4}-[A-Z2-9]{4}$')
+    && request.resource.data.qrToken is string
+    && request.resource.data.qrToken.matches('^[A-Za-z0-9_-]{32}$')
+    && request.resource.data.qrPayload == 'TF1|' + ticketNo + '|' + request.resource.data.qrToken
+    && request.resource.data.used == false
+    && request.resource.data.usedAt == null
+    && request.resource.data.createdAt == request.time;
+
+  allow update: if isAdmin() && (
+    // 1) Köhnə birdəfəlik QR giriş tranzaksiyası — dəyişdirilməyib.
+    (
+      resource.data.used == false
+      && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['used', 'usedAt'])
+      && request.resource.data.used == true
+      && request.resource.data.usedAt == request.time
+      && getAfter(/databases/$(database)/documents/printCheckins/$(ticketNo)).data.code == ticketNo
+      && getAfter(/databases/$(database)/documents/printCheckins/$(ticketNo)).data.scannedAt == request.time
+    )
+    ||
+    // 2) Satış statusu — QR-nin used/usedAt sahələri dəyişmir.
+    (
+      resource.data.get('sold', false) == false
+      && resource.data.get('soldAt', null) == null
+      && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['sold', 'soldAt'])
+      && request.resource.data.diff(resource.data).affectedKeys().hasAll(['sold', 'soldAt'])
+      && request.resource.data.sold == true
+      && request.resource.data.soldAt == request.time
+    )
+  );
+
+  // Bilet silinərkən varsa onun daxilolma qeydi də eyni tranzaksiyada silinməlidir.
+  allow delete: if isAdmin()
+    && !existsAfter(/databases/$(database)/documents/printCheckins/$(ticketNo));
+}
+
+match /printCheckins/{ticketNo} {
+  allow read: if isAdmin();
+  allow create: if isAdmin()
+    && request.resource.data.keys().hasAll(['code', 'scannedAt'])
+    && request.resource.data.keys().hasOnly(['code', 'scannedAt'])
+    && request.resource.data.code == ticketNo
+    && request.resource.data.scannedAt == request.time
+    && get(/databases/$(database)/documents/printTickets/$(ticketNo)).data.used == false
+    && getAfter(/databases/$(database)/documents/printTickets/$(ticketNo)).data.used == true
+    && getAfter(/databases/$(database)/documents/printTickets/$(ticketNo)).data.usedAt == request.time;
+  allow update: if false;
+  // Daxilolma yalnız müvafiq bilet də eyni anda silindikdə silinə bilər.
+  allow delete: if isAdmin()
+    && !existsAfter(/databases/$(database)/documents/printTickets/$(ticketNo));
+}
+// ========================= SON =========================
