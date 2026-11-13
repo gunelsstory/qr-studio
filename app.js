@@ -424,7 +424,7 @@ function renderTicketList() {
       } catch(error) {toast(friendlyError(error));}
     });
     if (data.sold === true) {
-      action('Adı düzəlt', '', () => openSaleDialog(id, 'edit'));
+      action('Düzəliş et', '', () => openSaleDialog(id, 'edit'));
       action('Hazır et', 'action-restore', () => openSaleDialog(id, 'revert'));
     } else {
       action('Satıldı', 'action-primary', () => openSaleDialog(id, 'sell'));
