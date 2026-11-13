@@ -1,0 +1,67 @@
+TICKETFLOW — YENİ MİNİMALİST PANEL
+================================
+
+GITHUB ÜZƏRİNDƏ QURAŞDIRMA (kompüterdə Node.js tələb olunmur)
+1. GitHub reposunun mövcud versiyasını ehtiyat nüsxə kimi saxlayın.
+2. Bu ZIP-i açın. İçindəki index.html, app.js, dashboard-ui.js,
+   studio.css, firebase-config.js, logo.png, CNAME və qayda faylını
+   GitHub reposunun KÖKÜNƏ yükləyin (əlavə alt qovluğa yox).
+3. Eyni adlı index.html, app.js, dashboard-ui.js fayllarını əvəz edin.
+   studio.css YENİ fayldır, onu da yükləyin.
+4. Əvvəlki style.css, dashboard.css, glass.css, reference-glass.css,
+   reference-ui.js fayllarına yeni versiyada ehtiyac yoxdur.
+   Əvvəlcə saytı yoxlayın, sonra istəsəniz həmin köhnə faylları silin.
+5. GitHub-da Commit changes edin, Pages yayımlanandan sonra Ctrl+Shift+R.
+
+MÜTLƏQ FIRESTORE QAYDALARINI DA YENİLƏYİN!
+Yeni satış məlumatları printTickets/{code} sənədində saxlanılır:
+  sold: true/false
+  soldAt: Timestamp/null
+  buyerName: string/null
+
+'firestore-rules-snippet.txt' faylında İKİ uyğunlaşdırılmış match bloku var.
+Firebase Console > Firestore Database > Rules daxilində yalnız mövcud
+/printTickets/{ticketNo} və /printCheckins/{ticketNo} bloklarını
+həmin fayldakı bloklarla əvəz edin. Digər qaydaları/isAdmin() funksiyasını
+saxlayın. Publish basın. ƏKS HALDA yeni satış əməliyyatları icazə xətası verəcək.
+Əvvəlki rules faylını mütləq ehtiyat nüsxə kimi saxlayın.
+
+YENİ İMKANLAR
+- Tam yenilənmiş rənglər və mobil/masaüstü minimalist interfeys.
+- Bilet satıldıqda alıcının adı və soyadı tələb edilir.
+- Satılmış biletdə alıcı adını dəyişmək mümkündür.
+- Səhvən satılmış bilet yenidən Hazır edilir, alıcı və satış tarixi sıfırlanır.
+- Hazır / Satıldı / Giriş edib filtrləri; bilet kodu və alıcı adı ilə axtarış.
+- Excel-də alıcının adı və soyadı göstərilir; filtr də tətbiq edilir.
+- QR, bilet yaratma, Firebase Auth, Firestore dinləyiciləri, birdəfəlik
+  giriş, bilet silmə, QR PNG, Excel və kamera funksiyaları saxlanılıb.
+- Firestore və canlı bağlantı haqqında texniki reklam yazıları UI-dan çıxarılıb.
+
+ƏVVƏLKİ BİLETLƏR
+Köhnə sold=true biletlər olduğu kimi göstərilir. Alıcı adı əvvəllər
+saxlanılmayıbsa 'Ad qeyd edilməyib' görünəcək; Adı düzəlt ilə doldurun.
+Köhnə satılmamış biletlərdə sold sahəsinin olmaması Hazır sayılır.
+Satış statusu ilə QR used/usedAt statusu MÜSTƏQİLDİR. Satışı geri
+qaytarmaq əvvəldən skan edilmiş QR kodu ikinci dəfə aktiv etmir.
+
+YOXLAMA PLANI
+[ ] Admin girişi və çıxış
+[ ] Yeni bilet yarat, QR kopyala və PNG yüklə
+[ ] Hazır -> Satıldı, ad-soyad daxil et, başqa cihazda yoxla
+[ ] Adı düzəlt; Satıldı -> Hazır -> yenidən Satıldı
+[ ] Axtarış, status filtri, Excel-də alıcı adı
+[ ] QR oxut; eyni QR-ni ikinci dəfə oxutmağa cəhd et
+[ ] Bilet + giriş silinməsi, giriş Excel-i
+[ ] Mobil menyu və fərqli ekran ölçüləri
+
+YALNIZ STATİK YOXLAMA APARILIB: JS sintaksisi, tələb olunan DOM ID-lər,
+HTML struktur uyğunluğu. Canlı Firebase Auth/Firestore və kamera sınağını
+bu mühitdə aparmaq mümkün olmayıb; GitHub-da sınaqdan keçirin.
+
+
+YENI REYNG VERSIYASI (v2) / 13.11.2026
+- Sol panelin basinda yalniz movcud logo.png gorunur; elave marka yazi ve asagi profil bloku cixarilib.
+- Navigasiya menyusu ve onun etiketleri qaliib, isleklik deyismeyib.
+- Canli mavi, firuze, narinci statuslarla yeni renk palitrasi: yalniz index.html ve studio.css funksional olmayan dizayn deyisiklikleridir.
+- Firestore Rules ucun bu vizual yenilemede hec bir elave deyisiklik teleb olunmur.
+- GitHub-a butun paket fayllarini yukle ve eyni adli fayllari yenile. GitHub Pages publish sonra Ctrl+F5 ile yenile.

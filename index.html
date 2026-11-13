@@ -1,0 +1,112 @@
+<!doctype html>
+<html lang="az">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#16213e">
+  <meta name="description" content="TicketFlow — bilet, satış və giriş idarəetməsi.">
+  <title>TicketFlow · Bilet idarəetməsi</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="./studio.css?v=2">
+</head>
+<body>
+  <div id="authScreen" class="auth-screen">
+    <div class="auth-intro">
+      <div class="auth-mark"><img src="./logo.png" alt="TicketFlow"><span>ticketflow<span class="auth-mark-dot">.</span></span></div>
+      <div class="auth-intro-text"><span class="auth-index">İDARƏETMƏ SİSTEMİ / 01</span><h2>Hər biletin<br>öz hekayəsi var.</h2><p>Yaratmaqdan qapıdakı son yoxlamaya qədər hər şey bir yerdə.</p></div>
+      <div class="auth-intro-foot">TICKETFLOW © 2026</div>
+      <div class="auth-decoration" aria-hidden="true"><span></span><span></span><span></span></div>
+    </div>
+    <main class="auth-main">
+      <form id="loginForm" class="login-panel">
+        <span class="section-label">ADMİN GİRİŞİ</span>
+        <h1>Yenidən xoş<br>gəlmisiniz.</h1>
+        <p class="auth-description">Biletlərinizi idarə etmək üçün hesabınıza daxil olun.</p>
+        <label for="email">E-poçt ünvanı</label>
+        <input id="email" type="email" autocomplete="username" placeholder="email@example.com" required>
+        <label for="password">Şifrə</label>
+        <input id="password" type="password" autocomplete="current-password" placeholder="Şifrəniz" required>
+        <button type="submit" id="loginBtn" class="button button-primary button-wide">Daxil ol <span aria-hidden="true">↗</span></button>
+        <p id="loginError" class="form-error" role="alert"></p>
+        <p class="auth-legal">Yalnız səlahiyyətli administratorlar üçün.</p>
+      </form>
+    </main>
+  </div>
+
+  <div id="app" class="app hidden">
+    <div class="dashboard-frame">
+      <aside id="dashboardSidebar" class="dashboard-sidebar" aria-label="Əsas naviqasiya">
+        <a class="sidebar-brand" href="#overview" aria-label="TicketFlow — iş masası"><span class="brand-seal"><img src="./logo.png" alt="TicketFlow loqosu"></span></a>
+        <div class="nav-caption">İŞ MASASI</div>
+        <nav id="sidebarNav" class="sidebar-nav" aria-label="Bölmələr">
+          <a href="#overview" data-section="overview" class="nav-link is-active" aria-current="page"><span class="nav-icon">◫</span><span>Ümumi baxış</span></a>
+          <a href="#generator" data-section="generator" class="nav-link"><span class="nav-icon">＋</span><span>Yeni bilet</span></a>
+          <a href="#ticketLibrary" data-section="ticketLibrary" class="nav-link"><span class="nav-icon">▤</span><span>Biletlər</span></a>
+        </nav>
+        <div class="nav-caption nav-caption-second">GİRİŞ NƏZARƏTİ</div>
+        <nav class="sidebar-nav" aria-label="Giriş nəzarəti">
+          <a href="#scanner" data-section="scanner" class="nav-link"><span class="nav-icon">⌗</span><span>QR skaner</span></a>
+          <a href="#admissions" data-section="admissions" class="nav-link"><span class="nav-icon">☷</span><span>Daxilolmalar</span></a>
+        </nav>
+        
+      </aside>
+      <div id="sidebarBackdrop" class="sidebar-backdrop" hidden></div>
+      <div class="dashboard-body">
+        <header class="site-header">
+          <div class="header-left"><button id="mobileMenuBtn" class="menu-toggle" type="button" aria-label="Menyunu aç" aria-controls="dashboardSidebar" aria-expanded="false"><span></span><span></span><span></span></button><span class="header-breadcrumb">TicketFlow <span>/</span> <b>İdarəetmə</b></span></div>
+          <div class="header-right"><span id="userLabel" class="user-email"></span><button id="logoutBtn" class="button button-logout" type="button">Çıxış <span aria-hidden="true">↗</span></button></div>
+        </header>
+        <main class="dashboard-main">
+          <section id="overview" class="dashboard-intro">
+            <div><p class="section-label">BİLET İDARƏETMƏSİ <span class="label-rule"></span> 2026</p><h1>İş masası<span class="title-period">.</span></h1><p class="intro-description">Satışlar, biletlər və girişlər — aydın və nəzarətdə.</p></div>
+            <a href="#generator" class="button button-primary intro-button"><span aria-hidden="true">＋</span> Yeni bilet yarat</a>
+          </section>
+          <section class="summary-grid" aria-label="Ümumi göstəricilər">
+            <article class="summary-card"><div class="summary-top"><span>Yaradılan biletlər</span><span class="metric-mark">01</span></div><strong id="statTotal">—</strong><small>Ümumi bilet sayı</small></article>
+            <article class="summary-card"><div class="summary-top"><span>Satılan biletlər</span><span class="metric-mark">02</span></div><strong id="statSold">—</strong><small>Ad və soyadla qeydə alınanlar</small></article>
+            <article class="summary-card"><div class="summary-top"><span>Hazır biletlər</span><span class="metric-mark">03</span></div><strong id="statReady">—</strong><small>Hələ satılmayan biletlər</small></article>
+            <article class="summary-card summary-card-dark"><div class="summary-top"><span>Təsdiqlənmiş giriş</span><span class="metric-mark">04</span></div><strong id="statScanned">—</strong><div class="summary-progress"><span id="statRateBar"></span></div><small><span id="statCheckinRate">0%</span> giriş göstəricisi · <span id="statAvailable">—</span> gözləyir</small></article>
+          </section>
+          <section class="section-with-heading" id="generator">
+            <div class="content-heading"><div><p class="section-label">01 / BİLET YARADILMASI</p><h2>Yeni bilet</h2></div><p>Hər bilet üçün fərdi nömrə və QR kod.</p></div>
+            <div class="generator-layout">
+              <article class="panel generator-panel"><div class="panel-tag">YARAT</div><h3>Bir kliklə hazır.</h3><p class="panel-subcopy">Yeni bilet avtomatik nömrələnir. QR kodu yaradıldıqdan sonra çap üçün yükləyə bilərsiniz.</p>
+                <div class="generator-illustration" aria-hidden="true"><div class="ticket-symbol"><div class="ticket-dots">•••</div><span>TF—0000</span><b>////</b></div><span class="illustration-arrow">↗</span></div>
+                <button id="generateBtn" type="button" class="button button-primary button-wide generate-action"><span aria-hidden="true">＋</span> Yeni bilet yarat <span aria-hidden="true">↗</span></button>
+                <p id="generateMessage" class="action-hint" aria-live="polite">Hazır olduğunuzda yeni bilet yaradın.</p>
+              </article>
+              <article class="panel ticket-panel" id="tickets"><div class="panel-headline"><div><div class="panel-tag">ÖNİZLƏMƏ</div><h3>Bilet məlumatı</h3></div><span id="ticketState" class="state-pill state-neutral">SEÇİLMƏYİB</span></div>
+                <div class="ticket-preview"><div class="qr-wrap"><div id="qrcode"></div><div id="qrEmpty" class="qr-empty"><div class="qr-placeholder-art" aria-hidden="true">▦</div><span>QR kod burada görünəcək</span></div></div><div class="ticket-information"><span class="detail-label">BİLET NÖMRƏSİ</span><strong id="ticketNumber" class="ticket-code">TF-••••-••••-••••</strong><p id="ticketMeta" class="ticket-hint">Siyahıdan bilet seçin və ya yeni bilet yaradın.</p><div class="ticket-actions"><button id="copyBtn" type="button" class="button button-secondary" disabled>Kodu kopyala</button><button id="downloadBtn" type="button" class="button button-dark" disabled>QR PNG yüklə ↓</button></div></div></div>
+              </article>
+            </div>
+          </section>
+          <section id="ticketLibrary" class="section-with-heading library-section">
+            <div class="content-heading"><div><p class="section-label">02 / SATIŞ VƏ BİLETLƏR</p><h2>Bilet siyahısı</h2></div><p>Statusu dəyişin, alıcıları tapın, QR kodları idarə edin.</p></div>
+            <div class="panel library-panel"><div class="list-controls"><div class="list-controls-title"><strong>Yaradılan biletlər</strong><span id="recentCount" class="count-label">—</span></div><div class="list-control-actions"><label class="visually-hidden" for="ticketSearch">Bilet və ya alıcı axtarışı</label><div class="search-input"><span aria-hidden="true">⌕</span><input id="ticketSearch" type="search" placeholder="Kod və ya ad-soyad axtar..." autocomplete="off"></div><label class="visually-hidden" for="ticketStatusFilter">Biletləri filtr et</label><select id="ticketStatusFilter" aria-label="Statusa görə filtr"><option value="all">Bütün biletlər</option><option value="ready">Hazır</option><option value="sold">Satıldı</option><option value="used">Giriş edib</option></select><button id="exportTicketsBtn" type="button" class="button button-secondary" disabled>Excel ↓</button></div></div>
+              <div class="table-caption"><span>BİLET / TARİX</span><span>ALICI</span><span>STATUS</span><span>ƏMƏLİYYATLAR</span></div>
+              <div id="recentList" class="recent-list"><p class="empty-list">Hələ bilet yoxdur.</p></div>
+              <div class="library-footnote">Satış statusu və QR ilə giriş ayrı-ayrı idarə olunur.</div>
+            </div>
+          </section>
+          <section class="section-with-heading admission-section"><div class="content-heading"><div><p class="section-label">03 / GİRİŞ NƏZARƏTİ</p><h2>QR yoxlama</h2></div><p>Hər QR kod yalnız bir dəfə təsdiqlənir.</p></div>
+            <div class="admission-layout"><article id="scanner" class="panel scanner-panel"><div class="panel-headline"><div><div class="panel-tag">SKANER</div><h3>Bileti yoxla</h3></div><span id="cameraStatus" class="state-pill state-neutral"><span id="cameraStatusText">KAMERA BAĞLIDIR</span></span></div><div id="scannerFrame" class="scanner-frame"><div id="scannerViewport"></div><div id="scannerPlaceholder" class="scanner-placeholder"><div class="scan-outline" aria-hidden="true"><i></i><i></i><i></i><i></i><span>⌗</span></div><strong>Kamera bağlıdır</strong><small>Yoxlamaya başlamaq üçün kameranı açın.</small></div><div class="scanner-overlay" aria-hidden="true"><div class="scanner-reticle"><i></i><i></i><i></i><i></i></div></div></div><div id="scanFeedback" class="scan-feedback hidden" aria-live="polite" role="status"></div><div class="scanner-buttons"><button id="startScanBtn" type="button" class="button button-primary">Kameranı aç</button><button id="nextScanBtn" type="button" class="button button-primary hidden">Növbəti bileti oxut</button><button id="stopScanBtn" type="button" class="button button-secondary hidden">Kameranı bağla</button></div><p class="small-note">Kamera üçün HTTPS və kamera icazəsi tələb olunur.</p></article>
+              <article id="admissions" class="panel admissions-panel"><div class="panel-headline"><div><div class="panel-tag">GİRİŞ TARİXÇƏSİ</div><h3>Daxilolmalar</h3></div><span id="admissionsCount" class="admission-counter">0<span> bilet</span></span></div><div class="admissions-heading"><span>BİLET NÖMRƏSİ</span><span>GİRİŞ VAXTI</span></div><div id="admissionsList" class="admissions-list"><div class="empty-admissions">Hələ təsdiqlənmiş giriş yoxdur.</div></div><div class="admissions-footer"><span>Son təsdiqlənmiş girişlər</span><button id="exportAdmissionsBtn" type="button" class="button button-secondary" disabled>Excel ↓</button></div></article></div>
+          </section>
+          <footer class="site-footer"><span>TicketFlow · Bilet idarəetməsi</span><span>© 2026</span></footer>
+        </main>
+      </div>
+    </div>
+  </div>
+
+  <dialog id="saleDialog" class="action-dialog" aria-labelledby="saleDialogTitle" aria-describedby="saleDialogDescription"><form id="saleForm" method="dialog"><div class="dialog-top"><span class="dialog-kicker">SATIŞ İDARƏETMƏSİ</span><button type="button" class="dialog-x" id="cancelSaleXBtn" aria-label="Bağla">×</button></div><h2 id="saleDialogTitle">Bileti satıldı kimi qeyd et</h2><p id="saleDialogDescription">Satış məlumatını daxil edin.</p><div class="dialog-ticket-code" id="saleTargetCode"></div><div id="saleNameGroup" class="form-field"><label for="buyerNameInput">Alıcının adı və soyadı</label><input id="buyerNameInput" type="text" autocomplete="off" maxlength="120" placeholder="Məsələn, Aysel Məmmədova" required><small>Minimum 2 simvol · məlumat biletin yanında görünəcək.</small></div><p id="saleMessage" class="dialog-message" role="status" aria-live="polite"></p><div class="dialog-actions"><button id="cancelSaleBtn" type="button" class="button button-secondary">Ləğv et</button><button id="confirmSaleBtn" type="submit" class="button button-primary">Satıldı kimi qeyd et</button></div></form></dialog>
+  <dialog id="deleteDialog" class="action-dialog" aria-labelledby="deleteDialogTitle" aria-describedby="deleteDialogDescription"><div class="dialog-top"><span class="dialog-kicker">BİLETİN SİLİNMƏSİ</span></div><h2 id="deleteDialogTitle">Bileti silmək istəyirsiniz?</h2><p id="deleteDialogDescription">Bilet və onun giriş qeydi birdəfəlik silinəcək. Bu əməliyyatı geri qaytarmaq mümkün deyil.</p><div id="deleteTargetCode" class="dialog-ticket-code"></div><p id="deleteMessage" class="dialog-message" role="status" aria-live="polite"></p><div class="dialog-actions"><button id="cancelDeleteBtn" type="button" class="button button-secondary">Ləğv et</button><button id="confirmDeleteBtn" type="button" class="button button-danger">Bileti sil</button></div></dialog>
+  <div id="toast" class="toast hidden" role="status" aria-live="polite"></div>
+  <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html5-qrcode/2.3.8/html5-qrcode.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+  <script src="./dashboard-ui.js?v=2" defer></script>
+  <script type="module" src="./app.js?v=12"></script>
+</body>
+</html>
